@@ -1,0 +1,161 @@
+services:
+  # Next.js Web Service (frontend + API)
+  - type: web
+    name: social-media-agent
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.11.0
+
+      # App
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+
+      # Database (Neon PostgreSQL)
+      - key: DATABASE_URL
+        sync: false
+
+      # Redis (Upstash)
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+
+      # Anthropic (Claude API + Agent SDK)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # Image Generation (Replicate / Flux)
+      - key: REPLICATE_API_TOKEN
+        sync: false
+
+      # Video Generation (Kling)
+      - key: KLING_API_KEY
+        sync: false
+
+      # Video Generation (Runway) - secondary
+      - key: RUNWAY_API_KEY
+        sync: false
+
+      # Web Search (SerpAPI)
+      - key: SERPAPI_API_KEY
+        sync: false
+
+      # Social Scraping (Apify)
+      - key: APIFY_API_TOKEN
+        sync: false
+
+      # Twitter/X API
+      - key: TWITTER_API_KEY
+        sync: false
+      - key: TWITTER_API_SECRET
+        sync: false
+      - key: TWITTER_BEARER_TOKEN
+        sync: false
+
+      # Reddit API
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+
+      # Cloudflare R2 Storage
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+
+      # Sentry Error Tracking
+      - key: SENTRY_DSN
+        sync: false
+
+  # Background Worker (BullMQ job processor)
+  - type: worker
+    name: agent-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.11.0
+
+      # Database (Neon PostgreSQL)
+      - key: DATABASE_URL
+        sync: false
+
+      # Redis (Upstash)
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+
+      # Anthropic (Claude API + Agent SDK)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # Image Generation (Replicate / Flux)
+      - key: REPLICATE_API_TOKEN
+        sync: false
+
+      # Video Generation (Kling)
+      - key: KLING_API_KEY
+        sync: false
+
+      # Video Generation (Runway)
+      - key: RUNWAY_API_KEY
+        sync: false
+
+      # Web Search (SerpAPI)
+      - key: SERPAPI_API_KEY
+        sync: false
+
+      # Social Scraping (Apify)
+      - key: APIFY_API_TOKEN
+        sync: false
+
+      # Twitter/X API
+      - key: TWITTER_API_KEY
+        sync: false
+      - key: TWITTER_API_SECRET
+        sync: false
+      - key: TWITTER_BEARER_TOKEN
+        sync: false
+
+      # Reddit API
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+
+      # Cloudflare R2 Storage
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+
+      # Sentry Error Tracking
+      - key: SENTRY_DSN
+        sync: false
