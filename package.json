@@ -14,7 +14,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "prepare": "husky"
+    "prepare": "node -e \"if (!process.env.CI && process.env.NODE_ENV !== 'production') { require('child_process').execSync('husky', {stdio: 'inherit'}) }\""
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
