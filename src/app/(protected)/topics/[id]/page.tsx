@@ -18,7 +18,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { topics, trends, scanJobs } from '@/db/schema';
 import type { SourceType } from '@/db/schema';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/lib/button-variants';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -209,11 +209,12 @@ export default async function TopicDetailPage({ params }: TopicDetailPageProps) 
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">
             Sources{' '}
-            <span className="text-muted-foreground font-normal">
-              ({topic.sources.length})
-            </span>
+            <span className="text-muted-foreground font-normal">({topic.sources.length})</span>
           </CardTitle>
-          <Link href={`/topics/${id}/edit`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <Link
+            href={`/topics/${id}/edit`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
             Manage
           </Link>
         </CardHeader>
@@ -284,7 +285,10 @@ export default async function TopicDetailPage({ params }: TopicDetailPageProps) 
           Deactivating a topic stops trend scanning. You can reactivate it later from the topics
           list.
         </p>
-        <Link href={`/topics/${id}/edit`} className={buttonVariants({ variant: 'destructive', size: 'sm' })}>
+        <Link
+          href={`/topics/${id}/edit`}
+          className={buttonVariants({ variant: 'destructive', size: 'sm' })}
+        >
           Manage Topic
         </Link>
       </div>

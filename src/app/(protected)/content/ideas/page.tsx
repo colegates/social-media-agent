@@ -4,7 +4,7 @@ import { and, eq, desc, count } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { contentIdeas, topics } from '@/db/schema';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/lib/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { Lightbulb } from 'lucide-react';
 import { IdeaFilters } from '@/components/features/ideas/IdeaFilters';

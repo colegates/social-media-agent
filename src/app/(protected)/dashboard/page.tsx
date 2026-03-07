@@ -6,7 +6,7 @@ import { db } from '@/db';
 import { topics, trends, scanJobs, contentIdeas } from '@/db/schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/lib/button-variants';
 import { TrendingUp, BookMarked, Zap, RefreshCw, Lightbulb } from 'lucide-react';
 import { TrendsList } from '@/components/features/trends/TrendsList';
 import { PlatformIcon, getPlatformLabel } from '@/components/features/ideas/PlatformIcon';
