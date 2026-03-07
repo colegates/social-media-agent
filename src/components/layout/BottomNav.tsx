@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookMarked, FileText, Settings, Library } from 'lucide-react';
+import { LayoutDashboard, BookMarked, FileText, Settings, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/topics', label: 'Topics', icon: BookMarked },
   { href: '/content', label: 'Content', icon: FileText },
-  { href: '/content/library', label: 'Library', icon: Library },
+  { href: '/settings/automation', label: 'Automation', icon: Bot },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -21,7 +21,12 @@ export function BottomNav() {
       <div className="grid h-16 grid-cols-5">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname.startsWith(item.href);
+          const isActive =
+            item.href === '/settings'
+              ? pathname === '/settings' ||
+                pathname.startsWith('/settings/api-keys') ||
+                pathname.startsWith('/settings/style')
+              : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
