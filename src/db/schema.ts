@@ -169,11 +169,48 @@ export type TopicSource = typeof topicSources.$inferSelect;
 export type NewTopicSource = typeof topicSources.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// Style Examples
+// ─────────────────────────────────────────────────────────
+
+export const styleExampleTypeEnum = pgEnum('style_example_type', [
+  'social_post',
+  'blog_article',
+  'image_description',
+  'brand_guideline',
+]);
+
+export type StyleExampleType = (typeof styleExampleTypeEnum.enumValues)[number];
+
+export const styleExamples = pgTable(
+  'style_examples',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: styleExampleTypeEnum('type').notNull(),
+    content: text('content').notNull(),
+    sourceUrl: text('source_url'),
+    platform: text('platform'), // instagram, tiktok, x, linkedin, blog
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_style_examples_user_id').on(table.userId),
+    index('idx_style_examples_type').on(table.type),
+  ]
+);
+
+export type StyleExample = typeof styleExamples.$inferSelect;
+export type NewStyleExample = typeof styleExamples.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Relations
 // ─────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
   topics: many(topics),
+  styleExamples: many(styleExamples),
 }));
 
 export const topicsRelations = relations(topics, ({ one, many }) => ({
@@ -183,4 +220,8 @@ export const topicsRelations = relations(topics, ({ one, many }) => ({
 
 export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
   topic: one(topics, { fields: [topicSources.topicId], references: [topics.id] }),
+}));
+
+export const styleExamplesRelations = relations(styleExamples, ({ one }) => ({
+  user: one(users, { fields: [styleExamples.userId], references: [users.id] }),
 }));
