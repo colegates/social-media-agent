@@ -205,6 +205,87 @@ export type StyleExample = typeof styleExamples.$inferSelect;
 export type NewStyleExample = typeof styleExamples.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// Trends
+// ─────────────────────────────────────────────────────────
+
+export const trendPlatformEnum = pgEnum('trend_platform', [
+  'google',
+  'tiktok',
+  'instagram',
+  'x',
+  'reddit',
+  'youtube',
+  'web',
+]);
+
+export type TrendPlatform = (typeof trendPlatformEnum.enumValues)[number];
+
+export const trends = pgTable(
+  'trends',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    topicId: uuid('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    sourceUrl: text('source_url'),
+    platform: trendPlatformEnum('platform').notNull(),
+    viralityScore: integer('virality_score').notNull().default(0),
+    engagementData: jsonb('engagement_data').default({}).notNull(),
+    rawData: jsonb('raw_data').default({}).notNull(),
+    discoveredAt: timestamp('discovered_at', { mode: 'date' }).defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { mode: 'date' }),
+  },
+  (table) => [
+    index('idx_trends_topic_id').on(table.topicId),
+    index('idx_trends_virality_score').on(table.viralityScore),
+    index('idx_trends_discovered_at').on(table.discoveredAt),
+    index('idx_trends_platform').on(table.platform),
+  ]
+);
+
+export type Trend = typeof trends.$inferSelect;
+export type NewTrend = typeof trends.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Scan Jobs
+// ─────────────────────────────────────────────────────────
+
+export const scanJobStatusEnum = pgEnum('scan_job_status', [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+]);
+
+export type ScanJobStatus = (typeof scanJobStatusEnum.enumValues)[number];
+
+export const scanJobs = pgTable(
+  'scan_jobs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    topicId: uuid('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+    status: scanJobStatusEnum('status').notNull().default('pending'),
+    trendsFound: integer('trends_found').notNull().default(0),
+    startedAt: timestamp('started_at', { mode: 'date' }).defaultNow().notNull(),
+    completedAt: timestamp('completed_at', { mode: 'date' }),
+    errorLog: text('error_log'),
+    metadata: jsonb('metadata').default({}).notNull(),
+  },
+  (table) => [
+    index('idx_scan_jobs_topic_id').on(table.topicId),
+    index('idx_scan_jobs_status').on(table.status),
+    index('idx_scan_jobs_started_at').on(table.startedAt),
+  ]
+);
+
+export type ScanJob = typeof scanJobs.$inferSelect;
+export type NewScanJob = typeof scanJobs.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Relations
 // ─────────────────────────────────────────────────────────
 
@@ -216,6 +297,8 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const topicsRelations = relations(topics, ({ one, many }) => ({
   user: one(users, { fields: [topics.userId], references: [users.id] }),
   sources: many(topicSources),
+  trends: many(trends),
+  scanJobs: many(scanJobs),
 }));
 
 export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
@@ -224,4 +307,12 @@ export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
 
 export const styleExamplesRelations = relations(styleExamples, ({ one }) => ({
   user: one(users, { fields: [styleExamples.userId], references: [users.id] }),
+}));
+
+export const trendsRelations = relations(trends, ({ one }) => ({
+  topic: one(topics, { fields: [trends.topicId], references: [topics.id] }),
+}));
+
+export const scanJobsRelations = relations(scanJobs, ({ one }) => ({
+  topic: one(topics, { fields: [scanJobs.topicId], references: [topics.id] }),
 }));
