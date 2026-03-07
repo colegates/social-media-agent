@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 
@@ -28,9 +27,12 @@ export default function GlobalError({ error, reset }: ErrorPageProps) {
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button onClick={reset}>Try again</Button>
-          <Button variant="outline" render={<Link href="/" />}>
+          <a
+            href="/"
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted hover:text-foreground"
+          >
             Go home
-          </Button>
+          </a>
         </div>
       </div>
     </div>
