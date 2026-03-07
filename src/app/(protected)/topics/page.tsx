@@ -20,12 +20,9 @@ export default async function TopicsPage() {
     orderBy: (t, { desc }) => [desc(t.createdAt)],
   });
 
-  // Filter to show only active topics by default; inactive ones are still in DB
-  const activeTopics = userTopics.filter((t) => t.isActive);
-
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <TopicsClient initialTopics={activeTopics} />
+      <TopicsClient initialTopics={userTopics} />
     </div>
   );
 }
