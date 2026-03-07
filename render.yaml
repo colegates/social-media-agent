@@ -5,8 +5,8 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm ci && npm run db:migrate && npm run build
-    startCommand: npm start
+    buildCommand: npm ci && npm run build
+    startCommand: npm run db:migrate && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -47,6 +47,8 @@ services:
         sync: false
       - key: R2_BUCKET_NAME
         sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
 
       # Sentry Error Tracking
       - key: SENTRY_DSN
@@ -59,7 +61,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm ci && npm run build
-    startCommand: npm run worker
+    startCommand: npm run db:migrate && npm run worker
     envVars:
       - key: NODE_ENV
         value: production
@@ -90,6 +92,8 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
         sync: false
 
       # Sentry Error Tracking
