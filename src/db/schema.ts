@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   uuid,
   text,
   timestamp,
@@ -7,7 +8,9 @@ import {
   integer,
   boolean,
   primaryKey,
+  index,
 } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 import type { AdapterAccountType } from 'next-auth/adapters';
 
 // ─────────────────────────────────────────────────────────
@@ -100,3 +103,84 @@ export const authenticators = pgTable(
   },
   (authenticator) => [primaryKey({ columns: [authenticator.userId, authenticator.credentialID] })]
 );
+
+// ─────────────────────────────────────────────────────────
+// Topics
+// ─────────────────────────────────────────────────────────
+
+export const topics = pgTable(
+  'topics',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    keywords: text('keywords').array().notNull().default([]),
+    scanFrequencyMinutes: integer('scan_frequency_minutes').notNull().default(60),
+    isActive: boolean('is_active').notNull().default(true),
+    settings: jsonb('settings').notNull().default({}),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_topics_user_id').on(table.userId),
+    index('idx_topics_is_active').on(table.isActive),
+    index('idx_topics_user_active').on(table.userId, table.isActive),
+  ]
+);
+
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Topic Sources
+// ─────────────────────────────────────────────────────────
+
+export const sourceTypeEnum = pgEnum('source_type', [
+  'website',
+  'social_link',
+  'subreddit',
+  'hashtag',
+  'search_term',
+  'competitor_account',
+]);
+
+export type SourceType = (typeof sourceTypeEnum.enumValues)[number];
+
+export const topicSources = pgTable(
+  'topic_sources',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    topicId: uuid('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+    type: sourceTypeEnum('type').notNull(),
+    value: text('value').notNull(),
+    label: text('label'),
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_topic_sources_topic_id').on(table.topicId)]
+);
+
+export type TopicSource = typeof topicSources.$inferSelect;
+export type NewTopicSource = typeof topicSources.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Relations
+// ─────────────────────────────────────────────────────────
+
+export const usersRelations = relations(users, ({ many }) => ({
+  topics: many(topics),
+}));
+
+export const topicsRelations = relations(topics, ({ one, many }) => ({
+  user: one(users, { fields: [topics.userId], references: [users.id] }),
+  sources: many(topicSources),
+}));
+
+export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
+  topic: one(topics, { fields: [topicSources.topicId], references: [topics.id] }),
+}));
