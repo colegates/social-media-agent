@@ -12,10 +12,9 @@ export const metadata: Metadata = {
     template: '%s | Social Media Agent',
   },
   description: 'AI-powered social media trend scanner and content generator',
-  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Social Agent',
   },
 };
