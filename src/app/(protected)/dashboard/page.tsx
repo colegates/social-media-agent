@@ -1,15 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { eq, and, desc, gte, inArray } from 'drizzle-orm';
+import { eq, and, desc, gte, inArray, count, isNotNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
-import { topics, trends, scanJobs } from '@/db/schema';
+import { topics, trends, scanJobs, contentIdeas } from '@/db/schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
-import { TrendingUp, BookMarked, FileText, Zap, RefreshCw } from 'lucide-react';
+import { TrendingUp, BookMarked, Zap, RefreshCw, Lightbulb } from 'lucide-react';
 import { TrendsList } from '@/components/features/trends/TrendsList';
+import { PlatformIcon, getPlatformLabel } from '@/components/features/ideas/PlatformIcon';
 import type { TrendCardData } from '@/components/features/trends/TrendCard';
+import type { ContentIdeaPlatform } from '@/db/schema';
 
 export const metadata: Metadata = {
   title: 'Dashboard',
@@ -28,9 +30,14 @@ export default async function DashboardPage() {
   const topicIds = userTopics.map((t) => t.id);
 
   // Fetch stats and top trends in parallel
+  // eslint-disable-next-line react-hooks/purity
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
 
-  const [recentTrendsRaw, recentScans] = await Promise.all([
+  const [recentTrendsRaw, recentScans, ideaStats, todayApprovedIdeas] = await Promise.all([
     topicIds.length > 0
       ? db
           .select({
@@ -46,12 +53,7 @@ export default async function DashboardPage() {
             expiresAt: trends.expiresAt,
           })
           .from(trends)
-          .where(
-            and(
-              inArray(trends.topicId, topicIds),
-              gte(trends.discoveredAt, sevenDaysAgo)
-            )
-          )
+          .where(and(inArray(trends.topicId, topicIds), gte(trends.discoveredAt, sevenDaysAgo)))
           .orderBy(desc(trends.viralityScore))
           .limit(20)
       : Promise.resolve([]),
@@ -59,14 +61,38 @@ export default async function DashboardPage() {
       ? db
           .select({ id: scanJobs.id, topicId: scanJobs.topicId, status: scanJobs.status })
           .from(scanJobs)
-          .where(
-            and(
-              inArray(scanJobs.topicId, topicIds),
-              gte(scanJobs.startedAt, sevenDaysAgo)
-            )
-          )
+          .where(and(inArray(scanJobs.topicId, topicIds), gte(scanJobs.startedAt, sevenDaysAgo)))
       : Promise.resolve([]),
+    db
+      .select({ status: contentIdeas.status, total: count() })
+      .from(contentIdeas)
+      .where(eq(contentIdeas.userId, userId))
+      .groupBy(contentIdeas.status),
+    db
+      .select({
+        id: contentIdeas.id,
+        title: contentIdeas.title,
+        platform: contentIdeas.platform,
+        contentType: contentIdeas.contentType,
+        status: contentIdeas.status,
+        priorityScore: contentIdeas.priorityScore,
+        scheduledFor: contentIdeas.scheduledFor,
+      })
+      .from(contentIdeas)
+      .where(
+        and(
+          eq(contentIdeas.userId, userId),
+          eq(contentIdeas.status, 'approved'),
+          isNotNull(contentIdeas.scheduledFor),
+          gte(contentIdeas.scheduledFor, todayStart)
+        )
+      )
+      .orderBy(desc(contentIdeas.priorityScore))
+      .limit(5),
   ]);
+
+  const statsByStatus = Object.fromEntries(ideaStats.map((r) => [r.status, r.total]));
+  const pendingIdeas = statsByStatus.suggested ?? 0;
 
   const topicNameMap = new Map(userTopics.map((t) => [t.id, t.name]));
   const topTrends: TrendCardData[] = recentTrendsRaw.map((t) => ({
@@ -101,10 +127,10 @@ export default async function DashboardPage() {
     },
     {
       label: 'Content Ideas',
-      value: '0',
-      icon: FileText,
-      description: 'Awaiting review (Stage 5)',
-      href: null,
+      value: String(pendingIdeas),
+      icon: Lightbulb,
+      description: pendingIdeas === 1 ? 'Awaiting review' : 'Awaiting review',
+      href: pendingIdeas > 0 ? '/content/ideas?status=suggested' : '/content/ideas',
     },
   ];
 
@@ -128,7 +154,10 @@ export default async function DashboardPage() {
         {stats.map((stat) => {
           const Icon = stat.icon;
           const cardContent = (
-            <Card key={stat.label} className={stat.href ? 'hover:border-border/80 transition-colors' : ''}>
+            <Card
+              key={stat.label}
+              className={stat.href ? 'hover:border-border/80 transition-colors' : ''}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
                 <Icon className="text-muted-foreground h-4 w-4" />
@@ -149,13 +178,61 @@ export default async function DashboardPage() {
         })}
       </div>
 
+      {/* Today's Ideas */}
+      {todayApprovedIdeas.length > 0 && (
+        <Card className="mb-8">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Today&apos;s Ideas</CardTitle>
+              <CardDescription>Approved ideas scheduled for today</CardDescription>
+            </div>
+            <Lightbulb className="text-muted-foreground h-5 w-5" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {todayApprovedIdeas.map((idea) => (
+                <Link
+                  key={idea.id}
+                  href={`/content/ideas/${idea.id}`}
+                  className="border-border hover:bg-accent flex items-center gap-3 rounded-lg border p-3 transition-colors"
+                >
+                  <PlatformIcon
+                    platform={idea.platform as ContentIdeaPlatform}
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{idea.title}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {getPlatformLabel(idea.platform as ContentIdeaPlatform)}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    {idea.priorityScore}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-4 text-center">
+              <Link
+                href="/content/ideas?status=approved"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                View all approved ideas
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Top Trends */}
       {hasTopics ? (
         <Card className="mb-8">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Top Trends</CardTitle>
-              <CardDescription>Highest virality trends across all your topics (last 7 days)</CardDescription>
+              <CardDescription>
+                Highest virality trends across all your topics (last 7 days)
+              </CardDescription>
             </div>
             <Zap className="text-muted-foreground h-5 w-5" />
           </CardHeader>
@@ -167,10 +244,7 @@ export default async function DashboardPage() {
             />
             {hasTrends && (
               <div className="mt-4 text-center">
-                <Link
-                  href="/topics"
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
+                <Link href="/topics" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                   View all topics
                 </Link>
               </div>

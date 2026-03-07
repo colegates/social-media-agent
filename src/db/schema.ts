@@ -324,6 +324,81 @@ export type ScanJob = typeof scanJobs.$inferSelect;
 export type NewScanJob = typeof scanJobs.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// Content Ideas
+// ─────────────────────────────────────────────────────────
+
+export const contentIdeaPlatformEnum = pgEnum('content_idea_platform', [
+  'instagram_post',
+  'instagram_reel',
+  'tiktok',
+  'x_post',
+  'x_thread',
+  'linkedin',
+  'blog',
+  'youtube_short',
+]);
+
+export type ContentIdeaPlatform = (typeof contentIdeaPlatformEnum.enumValues)[number];
+
+export const contentIdeaContentTypeEnum = pgEnum('content_idea_content_type', [
+  'image',
+  'video',
+  'carousel',
+  'text',
+  'blog_article',
+]);
+
+export type ContentIdeaContentType = (typeof contentIdeaContentTypeEnum.enumValues)[number];
+
+export const contentIdeaStatusEnum = pgEnum('content_idea_status', [
+  'suggested',
+  'approved',
+  'rejected',
+  'in_production',
+  'completed',
+  'published',
+]);
+
+export type ContentIdeaStatus = (typeof contentIdeaStatusEnum.enumValues)[number];
+
+export const contentIdeas = pgTable(
+  'content_ideas',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    topicId: uuid('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+    trendId: uuid('trend_id').references(() => trends.id, { onDelete: 'set null' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    platform: contentIdeaPlatformEnum('platform').notNull(),
+    contentType: contentIdeaContentTypeEnum('content_type').notNull(),
+    suggestedCopy: text('suggested_copy').notNull(),
+    visualDirection: text('visual_direction').notNull(),
+    priorityScore: integer('priority_score').notNull().default(0),
+    status: contentIdeaStatusEnum('status').notNull().default('suggested'),
+    scheduledFor: timestamp('scheduled_for', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_content_ideas_user_id').on(table.userId),
+    index('idx_content_ideas_topic_id').on(table.topicId),
+    index('idx_content_ideas_status').on(table.status),
+    index('idx_content_ideas_priority_score').on(table.priorityScore),
+    index('idx_content_ideas_scheduled_for').on(table.scheduledFor),
+    index('idx_content_ideas_user_status').on(table.userId, table.status),
+    index('idx_content_ideas_user_topic').on(table.userId, table.topicId),
+  ]
+);
+
+export type ContentIdea = typeof contentIdeas.$inferSelect;
+export type NewContentIdea = typeof contentIdeas.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Relations
 // ─────────────────────────────────────────────────────────
 
@@ -331,6 +406,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   topics: many(topics),
   styleExamples: many(styleExamples),
   apiKeys: many(userApiKeys),
+  contentIdeas: many(contentIdeas),
 }));
 
 export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
@@ -342,6 +418,7 @@ export const topicsRelations = relations(topics, ({ one, many }) => ({
   sources: many(topicSources),
   trends: many(trends),
   scanJobs: many(scanJobs),
+  contentIdeas: many(contentIdeas),
 }));
 
 export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
@@ -352,10 +429,17 @@ export const styleExamplesRelations = relations(styleExamples, ({ one }) => ({
   user: one(users, { fields: [styleExamples.userId], references: [users.id] }),
 }));
 
-export const trendsRelations = relations(trends, ({ one }) => ({
+export const trendsRelations = relations(trends, ({ one, many }) => ({
   topic: one(topics, { fields: [trends.topicId], references: [topics.id] }),
+  contentIdeas: many(contentIdeas),
 }));
 
 export const scanJobsRelations = relations(scanJobs, ({ one }) => ({
   topic: one(topics, { fields: [scanJobs.topicId], references: [topics.id] }),
+}));
+
+export const contentIdeasRelations = relations(contentIdeas, ({ one }) => ({
+  topic: one(topics, { fields: [contentIdeas.topicId], references: [topics.id] }),
+  trend: one(trends, { fields: [contentIdeas.trendId], references: [trends.id] }),
+  user: one(users, { fields: [contentIdeas.userId], references: [users.id] }),
 }));

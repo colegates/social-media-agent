@@ -20,6 +20,13 @@ export const SOURCE_TYPES = [
   'competitor_account',
 ] as const;
 
+export const topicSettingsSchema = z.object({
+  autoApproveThreshold: z.number().int().min(0).max(100).nullable().optional(),
+  notifyOnNewIdeas: z.boolean().optional(),
+});
+
+export type TopicSettings = z.infer<typeof topicSettingsSchema>;
+
 export const createTopicSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or fewer'),
   description: z
@@ -27,16 +34,14 @@ export const createTopicSchema = z.object({
     .max(2000, 'Description must be 2000 characters or fewer')
     .optional()
     .or(z.literal('')),
-  keywords: z
-    .array(z.string().min(1).max(100))
-    .min(0)
-    .max(20, 'Maximum 20 keywords allowed'),
+  keywords: z.array(z.string().min(1).max(100)).min(0).max(20, 'Maximum 20 keywords allowed'),
   scanFrequencyMinutes: z
     .number()
     .int()
     .min(15, 'Minimum scan frequency is 15 minutes')
     .max(1440, 'Maximum scan frequency is 24 hours'),
   isActive: z.boolean().optional().default(true),
+  settings: topicSettingsSchema.optional(),
 });
 
 export const updateTopicSchema = createTopicSchema.partial().extend({
