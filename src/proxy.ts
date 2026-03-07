@@ -44,7 +44,19 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = AUTH_PATHS.some((path) => pathname === path || pathname.startsWith(path));
 
   if (isProtectedPath || isAuthPath) {
-    const session = await auth();
+    let session = null;
+    try {
+      session = await auth();
+    } catch {
+      // If auth fails (e.g. missing AUTH_SECRET env var), fail open:
+      // allow access to auth pages, redirect protected pages to login
+      if (isProtectedPath) {
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('callbackUrl', pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      return response;
+    }
 
     if (isProtectedPath && !session) {
       const loginUrl = new URL('/login', request.url);
