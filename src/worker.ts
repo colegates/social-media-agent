@@ -12,10 +12,15 @@
 import { Worker } from 'bullmq';
 import { logger } from './lib/logger';
 import { getRedisConnectionOptions, closeRedisConnection } from './lib/queue/connection';
-import { QUEUE_NAMES } from './lib/queue/queues';
+import { QUEUE_NAMES, getContentIdeasQueue } from './lib/queue/queues';
 import { initScheduler } from './lib/queue/scheduler';
 import { runTrendScan } from './lib/agents/trend-scanner';
-import type { TrendScanJobData, ContentIdeasJobData, ContentGenerationJobData } from './lib/queue/queues';
+import { runContentCuration } from './lib/agents/content-curator';
+import type {
+  TrendScanJobData,
+  ContentIdeasJobData,
+  ContentGenerationJobData,
+} from './lib/queue/queues';
 
 const workerLogger = logger.child({ module: 'worker' });
 
@@ -55,14 +60,27 @@ async function start(): Promise<void> {
       jobLogger.info({ isManual: job.data.isManual }, 'Trend scan job started');
 
       try {
-        const result = await runTrendScan(
-          job.data.topicId,
-          job.data.userId,
-          job.data.scanJobId
-        );
+        const result = await runTrendScan(job.data.topicId, job.data.userId, job.data.scanJobId);
 
         const duration = Date.now() - startTime;
         jobLogger.info({ trendsFound: result.trendsFound, duration }, 'Trend scan job completed');
+
+        // Auto-trigger content idea generation when trends are found
+        if (result.trendIds.length > 0) {
+          try {
+            await getContentIdeasQueue().add('generate-ideas', {
+              topicId: job.data.topicId,
+              userId: job.data.userId,
+              trendIds: result.trendIds,
+            });
+            jobLogger.info(
+              { trendIds: result.trendIds.length },
+              'Content ideas job queued after trend scan'
+            );
+          } catch (queueErr) {
+            jobLogger.warn({ err: queueErr }, 'Failed to queue content ideas job - non-fatal');
+          }
+        }
 
         return result;
       } catch (err) {
@@ -93,8 +111,34 @@ async function start(): Promise<void> {
         topicId: job.data.topicId,
         trendCount: job.data.trendIds.length,
       });
-      jobLogger.info('Content ideas job received (Stage 5 - not yet implemented)');
-      // Stage 5 will implement this
+
+      const startTime = Date.now();
+      jobLogger.info('Content ideas job started');
+
+      try {
+        const result = await runContentCuration(
+          job.data.topicId,
+          job.data.userId,
+          job.data.trendIds
+        );
+
+        const duration = Date.now() - startTime;
+        jobLogger.info(
+          {
+            ideasGenerated: result.ideasGenerated,
+            ideasSaved: result.ideasSaved,
+            ideasAutoApproved: result.ideasAutoApproved,
+            duration,
+          },
+          'Content ideas job completed'
+        );
+
+        return result;
+      } catch (err) {
+        const duration = Date.now() - startTime;
+        jobLogger.error({ err, duration }, 'Content ideas job failed');
+        throw err;
+      }
     },
     {
       connection,
