@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 import { db } from '@/db';
 import { topics, trends, contentIdeas, users } from '@/db/schema';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte } from 'drizzle-orm';
 import { getUserApiKeys } from '@/lib/services/api-keys';
 import { generateIdeasForTrend } from './generator';
 import { scoreAndPrioritiseIdeas } from './prioritiser';
@@ -213,4 +213,59 @@ function defaultStyleProfile(): StyleProfileInput {
     doList: ['provide value', 'stay on-topic', 'use a clear CTA'],
     dontList: ['be overly salesy', 'use jargon', 'be generic'],
   };
+}
+
+/**
+ * Scheduled content curation run (not triggered by a fresh scan).
+ * Fetches the top recent high-virality trends from the DB and generates ideas for them.
+ * Used by the recurring content generation schedule.
+ */
+export async function runScheduledContentCuration(
+  topicId: string,
+  userId: string
+): Promise<CurationResult> {
+  const jobLogger = curatorLogger.child({ topicId, userId, scheduled: true });
+  const start = Date.now();
+
+  jobLogger.info('Scheduled content curation started');
+
+  // Load topic to get deduplication window
+  const topic = await db.query.topics.findFirst({
+    where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
+  });
+
+  if (!topic) {
+    throw new Error(`Topic ${topicId} not found for user ${userId}`);
+  }
+
+  // Fetch recent high-virality trends within the deduplication window
+  const windowHours = topic.trendDeduplicationWindowHours ?? 24;
+  const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
+
+  const recentTrendIds = await db
+    .select({ id: trends.id })
+    .from(trends)
+    .where(
+      and(
+        eq(trends.topicId, topicId),
+        gte(trends.discoveredAt, windowStart)
+      )
+    )
+    .orderBy(desc(trends.viralityScore))
+    .limit(MAX_TRENDS_TO_PROCESS);
+
+  if (recentTrendIds.length === 0) {
+    jobLogger.info({ windowHours }, 'No recent trends found within deduplication window');
+    return { ideasGenerated: 0, ideasSaved: 0, ideasAutoApproved: 0 };
+  }
+
+  const trendIds = recentTrendIds.map((t) => t.id);
+  jobLogger.info({ trendCount: trendIds.length, windowHours }, 'Found recent trends, running curation');
+
+  const result = await runContentCuration(topicId, userId, trendIds);
+
+  const duration = Date.now() - start;
+  jobLogger.info({ ...result, duration }, 'Scheduled content curation completed');
+
+  return result;
 }

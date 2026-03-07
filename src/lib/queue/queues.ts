@@ -18,6 +18,16 @@ export interface ContentIdeasJobData {
   trendIds: string[];
 }
 
+/**
+ * Job data for a scheduled (recurring) content generation run.
+ * Fetches recent high-virality trends from the DB rather than relying on fresh scan results.
+ */
+export interface ScheduledContentJobData {
+  topicId: string;
+  userId: string;
+  isScheduled: true;
+}
+
 export type ContentGenerationJobType =
   | 'generate_image'
   | 'generate_video'

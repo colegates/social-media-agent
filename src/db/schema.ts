@@ -121,6 +121,8 @@ export const topics = pgTable(
     description: text('description'),
     keywords: text('keywords').array().notNull().default([]),
     scanFrequencyMinutes: integer('scan_frequency_minutes').notNull().default(60),
+    contentGenerationFrequencyMinutes: integer('content_generation_frequency_minutes'),
+    trendDeduplicationWindowHours: integer('trend_deduplication_window_hours').notNull().default(24),
     isActive: boolean('is_active').notNull().default(true),
     settings: jsonb('settings').notNull().default({}),
     createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
