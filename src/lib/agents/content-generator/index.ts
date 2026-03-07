@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { orchestrateImageGeneration } from '@/lib/ai/image-generator';
 import { orchestrateVideoGeneration } from '@/lib/ai/video-generator';
 import { generateSocialCopy, generateBlogArticle, generateThread } from '@/lib/ai/text-generator';
+import { getUserApiKeys } from '@/lib/services/api-keys';
 import type { ContentGenerationJobData } from '@/lib/queue/queues';
 import type { StyleProfile } from '@/types';
 import type { ContentIdeaPlatform, GeneratedContentType } from '@/db/schema';
@@ -115,13 +116,22 @@ export async function runContentGeneration(
 
   genLogger.info('Content generator: starting');
 
-  // Load the content idea
-  const idea = await db.query.contentIdeas.findFirst({
-    where: and(eq(contentIdeas.id, contentIdeaId), eq(contentIdeas.userId, userId)),
-  });
+  // Load the content idea and user API keys in parallel
+  const [idea, apiKeys] = await Promise.all([
+    db.query.contentIdeas.findFirst({
+      where: and(eq(contentIdeas.id, contentIdeaId), eq(contentIdeas.userId, userId)),
+    }),
+    getUserApiKeys(userId, ['anthropic', 'replicate', 'openai', 'kling', 'runway']),
+  ]);
 
   if (!idea) {
     throw new Error(`Content idea ${contentIdeaId} not found for user ${userId}`);
+  }
+
+  if (!apiKeys.anthropic) {
+    throw new Error(
+      'Anthropic API key is required for content generation. Add it in Settings → API Keys.'
+    );
   }
 
   const styleProfile = await getUserStyleProfile(userId);
@@ -159,6 +169,11 @@ export async function runContentGeneration(
           style: jobData.imageOptions?.style,
         },
         preferDalle: jobData.imageOptions?.preferDalle,
+        apiKeys: {
+          anthropic: apiKeys.anthropic,
+          replicate: apiKeys.replicate,
+          openai: apiKeys.openai,
+        },
       });
 
       await markCompleted(recordId, {
@@ -201,6 +216,11 @@ export async function runContentGeneration(
         options: {
           duration: jobData.videoOptions?.duration ?? 5,
           aspectRatio: jobData.videoOptions?.aspectRatio ?? getVideoAspectRatio(platform),
+        },
+        apiKeys: {
+          anthropic: apiKeys.anthropic,
+          kling: apiKeys.kling,
+          runway: apiKeys.runway,
         },
       });
 
@@ -245,14 +265,25 @@ export async function runContentGeneration(
       let estimatedCost: number;
 
       if (isBlog) {
-        const blogResult = await generateBlogArticle(idea.title, idea.description, styleProfile, {
-          wordCount: jobData.textOptions?.wordCount,
-          seoKeywords: jobData.textOptions?.seoKeywords,
-        });
+        const blogResult = await generateBlogArticle(
+          idea.title,
+          idea.description,
+          styleProfile,
+          {
+            wordCount: jobData.textOptions?.wordCount,
+            seoKeywords: jobData.textOptions?.seoKeywords,
+          },
+          apiKeys.anthropic
+        );
         textContent = blogResult.content;
         estimatedCost = blogResult.estimatedCost;
       } else if (isThread) {
-        const threadResult = await generateThread(idea.title, idea.description, styleProfile);
+        const threadResult = await generateThread(
+          idea.title,
+          idea.description,
+          styleProfile,
+          apiKeys.anthropic
+        );
         textContent = threadResult.tweets.join('\n\n---\n\n');
         estimatedCost = threadResult.estimatedCost;
       } else {
@@ -261,7 +292,8 @@ export async function runContentGeneration(
           idea.description,
           idea.suggestedCopy,
           styleProfile,
-          platform
+          platform,
+          apiKeys.anthropic
         );
         textContent = copyResult.content;
         estimatedCost = copyResult.estimatedCost;

@@ -2,21 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '@/lib/logger';
 import type { StyleExample, StyleProfile } from '@/types';
 
-// ─────────────────────────────────────────────────────────
-// Singleton client
-// ─────────────────────────────────────────────────────────
-
-let _client: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (!_client) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-    }
-    _client = new Anthropic({ apiKey });
-  }
-  return _client;
+function getClient(anthropicKey: string): Anthropic {
+  return new Anthropic({ apiKey: anthropicKey });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -35,11 +22,7 @@ function getModel(): string {
 // Retry with exponential backoff
 // ─────────────────────────────────────────────────────────
 
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  context: string,
-  attempt = 0
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, context: string, attempt = 0): Promise<T> {
   try {
     return await fn();
   } catch (error) {
@@ -67,7 +50,10 @@ async function withRetry<T>(
 // analyseStyle
 // ─────────────────────────────────────────────────────────
 
-export async function analyseStyle(examples: StyleExample[]): Promise<StyleProfile> {
+export async function analyseStyle(
+  examples: StyleExample[],
+  anthropicKey: string
+): Promise<StyleProfile> {
   const claudeLogger = logger.child({ fn: 'analyseStyle', model: getModel() });
   claudeLogger.info({ exampleCount: examples.length }, 'Claude: starting style analysis');
 
@@ -102,7 +88,7 @@ You MUST respond with ONLY a valid JSON object matching this exact structure (no
 
   const response = await withRetry(
     () =>
-      getClient().messages.create({
+      getClient(anthropicKey).messages.create({
         model: getModel(),
         max_tokens: 2048,
         system: systemPrompt,
@@ -161,12 +147,17 @@ const PLATFORM_GUIDANCE: Record<string, string> = {
 export async function generateWithStyle(
   prompt: string,
   styleProfile: StyleProfile,
-  platform: string
+  platform: string,
+  anthropicKey: string
 ): Promise<string> {
   const claudeLogger = logger.child({ fn: 'generateWithStyle', model: getModel(), platform });
-  claudeLogger.info({ platform, prompt: prompt.slice(0, 100) }, 'Claude: starting styled generation');
+  claudeLogger.info(
+    { platform, prompt: prompt.slice(0, 100) },
+    'Claude: starting styled generation'
+  );
 
-  const platformGuidance = PLATFORM_GUIDANCE[platform.toLowerCase()] ?? `Write content for ${platform}.`;
+  const platformGuidance =
+    PLATFORM_GUIDANCE[platform.toLowerCase()] ?? `Write content for ${platform}.`;
   const platformStyle = styleProfile.platformPreferences[platform] ?? '';
 
   const systemPrompt = `You are a content writer who mirrors a specific brand voice exactly.
@@ -194,7 +185,7 @@ Write ONLY the content itself. No preamble, no explanation, no quotation marks a
 
   const response = await withRetry(
     () =>
-      getClient().messages.create({
+      getClient(anthropicKey).messages.create({
         model: getModel(),
         max_tokens: 1024,
         system: systemPrompt,

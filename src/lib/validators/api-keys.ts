@@ -14,7 +14,7 @@ export const API_KEY_SERVICES = [
 
 export const upsertApiKeySchema = z.object({
   service: z.enum(API_KEY_SERVICES),
-  key: z.string().min(1, 'API key is required').max(500, 'API key too long'),
+  key: z.string().min(1, 'API key is required').max(2000, 'API key too long'),
 });
 
 export const deleteApiKeySchema = z.object({

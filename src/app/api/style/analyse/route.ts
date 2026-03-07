@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { apiError, handleApiError } from '@/lib/utils/api-error';
 import { analyseStyle } from '@/lib/ai/claude';
+import { getUserApiKey } from '@/lib/services/api-keys';
 
 export async function POST(_req: NextRequest): Promise<NextResponse> {
   const routeLogger = logger.child({ route: 'POST /api/style/analyse' });
@@ -17,9 +18,12 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
       return apiError('UNAUTHORIZED', 'Authentication required');
     }
 
-    const examples = await db.query.styleExamples.findMany({
-      where: eq(styleExamples.userId, session.user.id),
-    });
+    const [examples, anthropicKey] = await Promise.all([
+      db.query.styleExamples.findMany({
+        where: eq(styleExamples.userId, session.user.id),
+      }),
+      getUserApiKey(session.user.id, 'anthropic'),
+    ]);
 
     if (examples.length === 0) {
       return apiError(
@@ -28,12 +32,19 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (!anthropicKey) {
+      return apiError(
+        'VALIDATION_ERROR',
+        'Anthropic API key is required for style analysis. Add it in Settings → API Keys.'
+      );
+    }
+
     routeLogger.info(
       { userId: session.user.id, exampleCount: examples.length },
       'Starting style analysis'
     );
 
-    const styleProfile = await analyseStyle(examples);
+    const styleProfile = await analyseStyle(examples, anthropicKey);
 
     // Persist the profile on the user record
     await db

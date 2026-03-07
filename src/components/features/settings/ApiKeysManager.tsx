@@ -11,7 +11,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     description: 'Powers AI-driven trend relevance scoring and future content generation features.',
     signUpUrl: 'https://console.anthropic.com/',
     docsUrl: 'https://docs.anthropic.com/en/api/getting-started',
-    envVar: 'ANTHROPIC_API_KEY',
     keyPlaceholder: 'sk-ant-...',
     pricingNote: 'Haiku model used for scoring — very low cost (~$0.001 per scan).',
     instructions: [
@@ -27,7 +26,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     description: 'Fetches trending Google search results and YouTube videos for your topics.',
     signUpUrl: 'https://serpapi.com/users/sign_up',
     docsUrl: 'https://serpapi.com/search-api',
-    envVar: 'SERPAPI_API_KEY',
     keyPlaceholder: 'Paste your SerpAPI key',
     pricingNote: 'Free plan includes 100 searches/month. Paid plans start at $50/month.',
     instructions: [
@@ -43,7 +41,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     description: 'Scrapes trending TikTok videos and Instagram posts related to your topics.',
     signUpUrl: 'https://console.apify.com/sign-up',
     docsUrl: 'https://docs.apify.com/api/v2',
-    envVar: 'APIFY_API_TOKEN',
     keyPlaceholder: 'apify_api_...',
     pricingNote: 'Free plan includes $5/month of compute credits (enough for ~50 scans).',
     instructions: [
@@ -59,7 +56,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     description: 'Searches real-time tweets and trending conversations on X (Twitter).',
     signUpUrl: 'https://developer.twitter.com/en/portal/dashboard',
     docsUrl: 'https://developer.twitter.com/en/docs/twitter-api',
-    envVar: 'TWITTER_BEARER_TOKEN',
     keyPlaceholder: 'AAAA...',
     optional: true,
     pricingNote:
@@ -73,12 +69,41 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     ],
   },
   {
+    service: 'reddit',
+    name: 'Reddit API',
+    description:
+      'Scans subreddits and Reddit search for trending discussions, viral posts, and emerging topics. Authenticated access gives higher rate limits.',
+    signUpUrl: 'https://www.reddit.com/prefs/apps',
+    docsUrl: 'https://www.reddit.com/dev/api/',
+    optional: true,
+    pricingNote: 'Free for up to 100 requests/minute with OAuth. No paid plan required.',
+    fields: [
+      {
+        id: 'clientId',
+        label: 'Client ID',
+        placeholder: 'e.g. AbCdEfGhIjKlMn',
+      },
+      {
+        id: 'clientSecret',
+        label: 'Client Secret',
+        placeholder: 'Paste your Reddit app secret',
+      },
+    ],
+    instructions: [
+      'Go to reddit.com/prefs/apps and log in with your Reddit account.',
+      'Scroll down and click "create another app..." at the bottom.',
+      'Select "script" as the app type. Set the name to anything (e.g. "Social Media Agent").',
+      'Set the redirect URI to "http://localhost:8080" (required but unused for script apps).',
+      'Click "create app". You will see two values: the Client ID (short code under the app name) and the Client Secret.',
+      'Enter both the Client ID and Client Secret in the fields below.',
+    ],
+  },
+  {
     service: 'replicate',
     name: 'Replicate (Image Generation)',
     description: 'Generates images for your social media posts using Flux and other models.',
     signUpUrl: 'https://replicate.com/signin',
     docsUrl: 'https://replicate.com/docs/reference/http',
-    envVar: 'REPLICATE_API_TOKEN',
     keyPlaceholder: 'r8_...',
     optional: true,
     pricingNote: 'Pay-per-use. Flux Schnell costs ~$0.003 per image.',
@@ -90,34 +115,12 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
     ],
   },
   {
-    service: 'reddit',
-    name: 'Reddit API',
-    description:
-      'Scans subreddits and Reddit search for trending discussions, viral posts, and emerging topics related to your niche.',
-    signUpUrl: 'https://www.reddit.com/prefs/apps',
-    docsUrl: 'https://www.reddit.com/dev/api/',
-    envVar: 'REDDIT_CLIENT_SECRET',
-    keyPlaceholder: 'Paste your Reddit app secret',
-    optional: true,
-    pricingNote: 'Free for up to 60 requests/minute for script apps. No paid plan required for read-only access.',
-    instructions: [
-      'First, register for Reddit API access: go to support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=14868593862164 and submit the form. This is required before you can create an app.',
-      'Once approved (usually instant for personal/script use), go to reddit.com/prefs/apps and log in.',
-      'Scroll down and click "create another app..." at the bottom.',
-      'Select "script" as the app type. Set the name to anything (e.g. "Social Media Agent"). Add a short description.',
-      'Set the redirect URI to "http://localhost:8080" (required by the form but not used for script apps).',
-      'Click "create app". You will see your Client ID (the string under the app name) and Client Secret (labelled "secret").',
-      'Paste the Client Secret below. Also set REDDIT_CLIENT_ID in your environment variables to the Client ID shown under the app name.',
-    ],
-  },
-  {
     service: 'openai',
     name: 'OpenAI (DALL-E 3)',
     description:
       'Generates high-quality images from text prompts using DALL-E 3. Used as an alternative to Replicate/Flux for image content creation.',
     signUpUrl: 'https://platform.openai.com/signup',
     docsUrl: 'https://platform.openai.com/docs/guides/images',
-    envVar: 'OPENAI_API_KEY',
     keyPlaceholder: 'sk-...',
     optional: true,
     pricingNote:
@@ -137,7 +140,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
       'Creates short AI-generated videos from text or image prompts. Ideal for TikTok, Reels, and YouTube Shorts content.',
     signUpUrl: 'https://klingai.com/',
     docsUrl: 'https://docs.qingque.cn/d/home/eZQB3yXxVbeVgJEh4rvCSFt7a',
-    envVar: 'KLING_API_KEY',
     keyPlaceholder: 'Paste your Kling AI API key',
     optional: true,
     pricingNote:
@@ -157,7 +159,6 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
       'Generates cinematic AI videos using Gen-3 Alpha. Produces high-quality short clips for social media, ads, and creative content.',
     signUpUrl: 'https://app.runwayml.com/signup',
     docsUrl: 'https://docs.runwayml.com/',
-    envVar: 'RUNWAY_API_KEY',
     keyPlaceholder: 'Paste your Runway API secret',
     optional: true,
     pricingNote:

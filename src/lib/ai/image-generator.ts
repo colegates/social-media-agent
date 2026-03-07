@@ -35,6 +35,12 @@ export interface GeneratedImageResult {
   promptUsed: string;
 }
 
+export interface ImageApiKeys {
+  anthropic?: string | null;
+  replicate?: string | null;
+  openai?: string | null;
+}
+
 // ─────────────────────────────────────────────────────────
 // Retry helper
 // ─────────────────────────────────────────────────────────
@@ -61,15 +67,14 @@ async function withRetry<T>(fn: () => Promise<T>, context: string, attempt = 0):
 async function enhancePromptWithClaude(
   visualDirection: string,
   styleProfile: StyleProfile | null,
-  aspectRatio: AspectRatio
+  aspectRatio: AspectRatio,
+  anthropicKey: string | null | undefined
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    // Fall back to raw visual direction if Claude is not configured
+  if (!anthropicKey) {
     return visualDirection;
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey: anthropicKey });
   const promptLogger = logger.child({ fn: 'enhancePromptWithClaude' });
 
   const aspectContext: Record<AspectRatio, string> = {
@@ -128,14 +133,10 @@ Write an optimised Flux image generation prompt:`;
 
 export async function generateImageFlux(
   prompt: string,
-  options: ImageGenerationOptions = {}
+  options: ImageGenerationOptions = {},
+  replicateToken: string
 ): Promise<Buffer> {
   const fluxLogger = logger.child({ fn: 'generateImageFlux', model: FLUX_MODEL });
-
-  const apiToken = process.env.REPLICATE_API_TOKEN;
-  if (!apiToken) {
-    throw new Error('REPLICATE_API_TOKEN environment variable is not set');
-  }
 
   const { aspectRatio = '1:1', negativePrompt } = options;
 
@@ -153,7 +154,7 @@ export async function generateImageFlux(
 
   const start = Date.now();
 
-  const replicate = new Replicate({ auth: apiToken });
+  const replicate = new Replicate({ auth: replicateToken });
 
   const output = await withRetry(
     () =>
@@ -220,14 +221,10 @@ export async function generateImageFlux(
 
 export async function generateImageDalle(
   prompt: string,
-  options: ImageGenerationOptions = {}
+  options: ImageGenerationOptions = {},
+  openaiKey: string
 ): Promise<Buffer> {
   const dalleLogger = logger.child({ fn: 'generateImageDalle' });
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is not set');
-  }
 
   const { aspectRatio = '1:1' } = options;
 
@@ -251,7 +248,7 @@ export async function generateImageDalle(
         fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${openaiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -308,6 +305,7 @@ export interface ImageOrchestrationInput {
   styleProfile: StyleProfile | null;
   options?: ImageGenerationOptions;
   preferDalle?: boolean; // use DALL-E when text-in-image is needed
+  apiKeys: ImageApiKeys;
 }
 
 export async function orchestrateImageGeneration(
@@ -319,13 +317,21 @@ export async function orchestrateImageGeneration(
     userId: input.userId,
   });
 
+  const { apiKeys } = input;
   const aspectRatio = input.options?.aspectRatio ?? '1:1';
+
+  if (!apiKeys.replicate && !apiKeys.openai) {
+    throw new Error(
+      'No image generation service configured. Add a Replicate or OpenAI API key in Settings → API Keys.'
+    );
+  }
 
   // Enhance the prompt with Claude
   const enhancedPrompt = await enhancePromptWithClaude(
     input.visualDirection,
     input.styleProfile,
-    aspectRatio
+    aspectRatio,
+    apiKeys.anthropic
   );
 
   orchLogger.info(
@@ -337,31 +343,35 @@ export async function orchestrateImageGeneration(
   let aiToolUsed: string;
   let estimatedCost: number;
 
-  if (input.preferDalle && process.env.OPENAI_API_KEY) {
+  if (input.preferDalle && apiKeys.openai) {
     try {
-      imageBuffer = await generateImageDalle(enhancedPrompt, input.options);
+      imageBuffer = await generateImageDalle(enhancedPrompt, input.options, apiKeys.openai);
       aiToolUsed = 'dalle3';
       estimatedCost = COST_ESTIMATES.dalle3;
     } catch (dalleError) {
       orchLogger.warn({ error: dalleError }, 'DALL-E 3 failed, falling back to Flux');
-      imageBuffer = await generateImageFlux(enhancedPrompt, input.options);
+      if (!apiKeys.replicate) throw dalleError;
+      imageBuffer = await generateImageFlux(enhancedPrompt, input.options, apiKeys.replicate);
       aiToolUsed = 'flux';
       estimatedCost = COST_ESTIMATES.flux;
     }
-  } else {
+  } else if (apiKeys.replicate) {
     try {
-      imageBuffer = await generateImageFlux(enhancedPrompt, input.options);
+      imageBuffer = await generateImageFlux(enhancedPrompt, input.options, apiKeys.replicate);
       aiToolUsed = 'flux';
       estimatedCost = COST_ESTIMATES.flux;
     } catch (fluxError) {
       orchLogger.warn({ error: fluxError }, 'Flux failed, falling back to DALL-E 3');
-      if (!process.env.OPENAI_API_KEY) {
-        throw fluxError;
-      }
-      imageBuffer = await generateImageDalle(enhancedPrompt, input.options);
+      if (!apiKeys.openai) throw fluxError;
+      imageBuffer = await generateImageDalle(enhancedPrompt, input.options, apiKeys.openai);
       aiToolUsed = 'dalle3';
       estimatedCost = COST_ESTIMATES.dalle3;
     }
+  } else {
+    // Only openai available
+    imageBuffer = await generateImageDalle(enhancedPrompt, input.options, apiKeys.openai!);
+    aiToolUsed = 'dalle3';
+    estimatedCost = COST_ESTIMATES.dalle3;
   }
 
   // Upload to R2

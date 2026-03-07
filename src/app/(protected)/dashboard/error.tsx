@@ -27,7 +27,13 @@ export default function DashboardError({ error, reset }: ErrorProps) {
             There was an error loading your dashboard. Please try again.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {process.env.NODE_ENV !== 'production' && error.message && (
+            <p className="bg-muted rounded p-2 font-mono text-xs break-all">{error.message}</p>
+          )}
+          {error.digest && (
+            <p className="text-muted-foreground text-xs">Error ID: {error.digest}</p>
+          )}
           <Button onClick={reset} variant="outline">
             Try again
           </Button>

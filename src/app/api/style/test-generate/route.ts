@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { apiError, handleApiError } from '@/lib/utils/api-error';
 import { generateTestPostSchema } from '@/lib/validators/style';
 import { generateWithStyle } from '@/lib/ai/claude';
+import { getUserApiKey } from '@/lib/services/api-keys';
 import type { StyleProfile } from '@/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -26,15 +27,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const { topic, platform } = parsed.data;
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-      columns: { styleProfile: true },
-    });
+    const [user, anthropicKey] = await Promise.all([
+      db.query.users.findFirst({
+        where: eq(users.id, session.user.id),
+        columns: { styleProfile: true },
+      }),
+      getUserApiKey(session.user.id, 'anthropic'),
+    ]);
 
     if (!user?.styleProfile) {
       return apiError(
         'VALIDATION_ERROR',
         'No style profile found. Please add examples and run style analysis first.'
+      );
+    }
+
+    if (!anthropicKey) {
+      return apiError(
+        'VALIDATION_ERROR',
+        'Anthropic API key is required. Add it in Settings → API Keys.'
       );
     }
 
@@ -45,7 +56,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       'Generating test post'
     );
 
-    const generatedContent = await generateWithStyle(topic, styleProfile, platform);
+    const generatedContent = await generateWithStyle(topic, styleProfile, platform, anthropicKey);
 
     routeLogger.info({ userId: session.user.id, platform }, 'Test post generated');
     return NextResponse.json({ data: { content: generatedContent, platform, topic } });

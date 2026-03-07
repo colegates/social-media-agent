@@ -36,6 +36,12 @@ export interface GeneratedVideoResult {
   promptUsed: string;
 }
 
+export interface VideoApiKeys {
+  anthropic?: string | null;
+  kling?: string | null;
+  runway?: string | null;
+}
+
 // ─────────────────────────────────────────────────────────
 // Retry helper
 // ─────────────────────────────────────────────────────────
@@ -63,12 +69,12 @@ async function enhanceVideoPromptWithClaude(
   visualDirection: string,
   styleProfile: StyleProfile | null,
   duration: number,
-  aspectRatio: VideoAspectRatio
+  aspectRatio: VideoAspectRatio,
+  anthropicKey: string | null | undefined
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return visualDirection;
+  if (!anthropicKey) return visualDirection;
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey: anthropicKey });
   const promptLogger = logger.child({ fn: 'enhanceVideoPromptWithClaude' });
 
   const formatContext: Record<VideoAspectRatio, string> = {
@@ -138,13 +144,9 @@ interface KlingTask {
 async function klingRequest(
   path: string,
   method: string,
+  apiKey: string,
   body?: Record<string, unknown>
 ): Promise<KlingTask> {
-  const apiKey = process.env.KLING_API_KEY;
-  if (!apiKey) {
-    throw new Error('KLING_API_KEY environment variable is not set');
-  }
-
   const response = await fetch(`https://api.klingai.com${path}`, {
     method,
     headers: {
@@ -164,7 +166,8 @@ async function klingRequest(
 
 export async function generateVideoKling(
   prompt: string,
-  options: VideoGenerationOptions = {}
+  options: VideoGenerationOptions = {},
+  klingApiKey: string
 ): Promise<Buffer> {
   const klingLogger = logger.child({ fn: 'generateVideoKling' });
   const { duration = 5, aspectRatio = '16:9', imageRef } = options;
@@ -186,7 +189,7 @@ export async function generateVideoKling(
   const endpoint = imageRef ? '/v1/videos/image2video' : '/v1/videos/text2video';
   const taskResponse = await withRetry(
     () =>
-      klingRequest(endpoint, 'POST', {
+      klingRequest(endpoint, 'POST', klingApiKey, {
         prompt,
         duration: String(duration),
         aspect_ratio: aspectRatioMap[aspectRatio],
@@ -212,7 +215,11 @@ export async function generateVideoKling(
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     pollAttempts++;
 
-    const statusResponse = await klingRequest(`/v1/videos/text2video/${taskId}`, 'GET');
+    const statusResponse = await klingRequest(
+      `/v1/videos/text2video/${taskId}`,
+      'GET',
+      klingApiKey
+    );
 
     const status = statusResponse.data.task_status;
     klingLogger.debug({ taskId, status, pollAttempts }, 'Kling: polling status');
@@ -267,15 +274,11 @@ interface RunwayTask {
 
 export async function generateVideoRunway(
   prompt: string,
-  options: VideoGenerationOptions = {}
+  options: VideoGenerationOptions = {},
+  runwayApiKey: string
 ): Promise<Buffer> {
   const runwayLogger = logger.child({ fn: 'generateVideoRunway' });
   const { duration = 5, imageRef } = options;
-
-  const apiKey = process.env.RUNWAY_API_KEY;
-  if (!apiKey) {
-    throw new Error('RUNWAY_API_KEY environment variable is not set');
-  }
 
   runwayLogger.info(
     { prompt: prompt.slice(0, 100), duration, estimatedCost: COST_ESTIMATES.runway },
@@ -290,7 +293,7 @@ export async function generateVideoRunway(
       fetch('https://api.dev.runwayml.com/v1/image_to_video', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${runwayApiKey}`,
           'Content-Type': 'application/json',
           'X-Runway-Version': '2024-11-06',
         },
@@ -324,7 +327,7 @@ export async function generateVideoRunway(
 
     const statusResponse = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${runwayApiKey}`,
         'X-Runway-Version': '2024-11-06',
       },
     });
@@ -369,6 +372,7 @@ export interface VideoOrchestrationInput {
   visualDirection: string;
   styleProfile: StyleProfile | null;
   options?: VideoGenerationOptions;
+  apiKeys: VideoApiKeys;
 }
 
 export async function orchestrateVideoGeneration(
@@ -380,14 +384,22 @@ export async function orchestrateVideoGeneration(
     userId: input.userId,
   });
 
+  const { apiKeys } = input;
   const aspectRatio = input.options?.aspectRatio ?? '16:9';
   const duration = input.options?.duration ?? 5;
+
+  if (!apiKeys.kling && !apiKeys.runway) {
+    throw new Error(
+      'No video generation service configured. Add a Kling AI or Runway API key in Settings → API Keys.'
+    );
+  }
 
   const enhancedPrompt = await enhanceVideoPromptWithClaude(
     input.visualDirection,
     input.styleProfile,
     duration,
-    aspectRatio
+    aspectRatio,
+    apiKeys.anthropic
   );
 
   orchLogger.info({ aspectRatio, duration }, 'Video orchestrator: starting generation');
@@ -396,27 +408,22 @@ export async function orchestrateVideoGeneration(
   let aiToolUsed: string;
   let estimatedCost: number;
 
-  const hasKling = !!process.env.KLING_API_KEY;
-  const hasRunway = !!process.env.RUNWAY_API_KEY;
-
-  if (hasKling) {
+  if (apiKeys.kling) {
     try {
-      videoBuffer = await generateVideoKling(enhancedPrompt, input.options);
+      videoBuffer = await generateVideoKling(enhancedPrompt, input.options, apiKeys.kling);
       aiToolUsed = 'kling';
       estimatedCost = COST_ESTIMATES.kling;
     } catch (klingError) {
       orchLogger.warn({ error: klingError }, 'Kling failed, falling back to Runway');
-      if (!hasRunway) throw klingError;
-      videoBuffer = await generateVideoRunway(enhancedPrompt, input.options);
+      if (!apiKeys.runway) throw klingError;
+      videoBuffer = await generateVideoRunway(enhancedPrompt, input.options, apiKeys.runway);
       aiToolUsed = 'runway';
       estimatedCost = COST_ESTIMATES.runway;
     }
-  } else if (hasRunway) {
-    videoBuffer = await generateVideoRunway(enhancedPrompt, input.options);
+  } else {
+    videoBuffer = await generateVideoRunway(enhancedPrompt, input.options, apiKeys.runway!);
     aiToolUsed = 'runway';
     estimatedCost = COST_ESTIMATES.runway;
-  } else {
-    throw new Error('No video generation service configured. Set KLING_API_KEY or RUNWAY_API_KEY.');
   }
 
   // Upload video to R2
