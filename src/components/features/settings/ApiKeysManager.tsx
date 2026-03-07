@@ -8,8 +8,7 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
   {
     service: 'anthropic',
     name: 'Anthropic (Claude AI)',
-    description:
-      'Powers AI-driven trend relevance scoring and future content generation features.',
+    description: 'Powers AI-driven trend relevance scoring and future content generation features.',
     signUpUrl: 'https://console.anthropic.com/',
     docsUrl: 'https://docs.anthropic.com/en/api/getting-started',
     envVar: 'ANTHROPIC_API_KEY',
@@ -25,8 +24,7 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
   {
     service: 'serpapi',
     name: 'SerpAPI (Google & YouTube)',
-    description:
-      'Fetches trending Google search results and YouTube videos for your topics.',
+    description: 'Fetches trending Google search results and YouTube videos for your topics.',
     signUpUrl: 'https://serpapi.com/users/sign_up',
     docsUrl: 'https://serpapi.com/search-api',
     envVar: 'SERPAPI_API_KEY',
@@ -42,8 +40,7 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
   {
     service: 'apify',
     name: 'Apify (TikTok & Instagram)',
-    description:
-      'Scrapes trending TikTok videos and Instagram posts related to your topics.',
+    description: 'Scrapes trending TikTok videos and Instagram posts related to your topics.',
     signUpUrl: 'https://console.apify.com/sign-up',
     docsUrl: 'https://docs.apify.com/api/v2',
     envVar: 'APIFY_API_TOKEN',
@@ -90,6 +87,87 @@ const INTEGRATIONS: Omit<ApiKeyCardConfig, 'keyHint'>[] = [
       'Go to Account Settings → API tokens.',
       'Click "Create token", name it, and copy the value.',
       'Paste it below. It starts with "r8_".',
+    ],
+  },
+  {
+    service: 'reddit',
+    name: 'Reddit API',
+    description:
+      'Scans subreddits and Reddit search for trending discussions, viral posts, and emerging topics related to your niche.',
+    signUpUrl: 'https://www.reddit.com/prefs/apps',
+    docsUrl: 'https://www.reddit.com/dev/api/',
+    envVar: 'REDDIT_CLIENT_SECRET',
+    keyPlaceholder: 'Paste your Reddit app secret',
+    optional: true,
+    pricingNote: 'Free for up to 100 requests/minute. No paid plan required for read-only access.',
+    instructions: [
+      'Go to reddit.com/prefs/apps and log in with your Reddit account.',
+      'Scroll down and click "create another app..." at the bottom.',
+      'Select "script" as the app type. Set the name to anything (e.g. "Social Media Agent").',
+      'Set the redirect URI to "http://localhost:8080" (required but not used for script apps).',
+      'Click "create app". You will see your Client ID (under the app name) and Client Secret.',
+      'Paste the Client Secret below. Also set REDDIT_CLIENT_ID in your environment variables to the Client ID shown under the app name.',
+    ],
+  },
+  {
+    service: 'openai',
+    name: 'OpenAI (DALL-E 3)',
+    description:
+      'Generates high-quality images from text prompts using DALL-E 3. Used as an alternative to Replicate/Flux for image content creation.',
+    signUpUrl: 'https://platform.openai.com/signup',
+    docsUrl: 'https://platform.openai.com/docs/guides/images',
+    envVar: 'OPENAI_API_KEY',
+    keyPlaceholder: 'sk-...',
+    optional: true,
+    pricingNote:
+      'DALL-E 3 Standard 1024x1024: $0.040/image. HD 1024x1792: $0.080/image. Requires pre-paid credits.',
+    instructions: [
+      'Sign up or log in at platform.openai.com.',
+      'Go to Settings and add a payment method (minimum $5 top-up).',
+      'Navigate to API Keys in the left sidebar (or visit platform.openai.com/api-keys).',
+      'Click "Create new secret key", give it a name, and copy the key immediately (you cannot view it again).',
+      'Paste the key below. It starts with "sk-".',
+    ],
+  },
+  {
+    service: 'kling',
+    name: 'Kling AI (Video Generation)',
+    description:
+      'Creates short AI-generated videos from text or image prompts. Ideal for TikTok, Reels, and YouTube Shorts content.',
+    signUpUrl: 'https://klingai.com/',
+    docsUrl: 'https://docs.qingque.cn/d/home/eZQB3yXxVbeVgJEh4rvCSFt7a',
+    envVar: 'KLING_API_KEY',
+    keyPlaceholder: 'Paste your Kling AI API key',
+    optional: true,
+    pricingNote:
+      'Free tier includes limited credits. Pro plans start from ~$8/month. Video generation costs vary by duration and quality.',
+    instructions: [
+      'Visit klingai.com and create an account (sign up with email or Google).',
+      'After logging in, navigate to Account Settings or the API section.',
+      'If API access is available, generate an API key from your account dashboard.',
+      'Copy the API key and paste it below.',
+      'Note: Kling API access may require applying for the developer programme or upgrading to a paid plan depending on availability in your region.',
+    ],
+  },
+  {
+    service: 'runway',
+    name: 'Runway (Gen-3 Alpha Video)',
+    description:
+      'Generates cinematic AI videos using Gen-3 Alpha. Produces high-quality short clips for social media, ads, and creative content.',
+    signUpUrl: 'https://app.runwayml.com/signup',
+    docsUrl: 'https://docs.runwayml.com/',
+    envVar: 'RUNWAY_API_KEY',
+    keyPlaceholder: 'Paste your Runway API secret',
+    optional: true,
+    pricingNote:
+      'Free plan includes 125 credits. Standard plan is $12/month (625 credits). Gen-3 Alpha costs ~5 credits/second of video.',
+    instructions: [
+      'Sign up at app.runwayml.com and verify your email.',
+      'Once logged in, click your profile icon and go to Settings then API Keys.',
+      'Click "Create API Key", give it a descriptive name (e.g. "Social Media Agent").',
+      'Copy the generated API secret immediately - it will only be shown once.',
+      'Paste the key below.',
+      'Note: API access requires a paid plan (Standard or higher). Free-tier users can upgrade from the Billing page.',
     ],
   },
 ];

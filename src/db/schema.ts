@@ -214,6 +214,8 @@ export const apiKeyServiceEnum = pgEnum('api_key_service', [
   'apify',
   'twitter',
   'replicate',
+  'reddit',
+  'openai',
   'kling',
   'runway',
 ]);

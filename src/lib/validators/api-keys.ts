@@ -6,6 +6,8 @@ export const API_KEY_SERVICES = [
   'apify',
   'twitter',
   'replicate',
+  'reddit',
+  'openai',
   'kling',
   'runway',
 ] as const;
