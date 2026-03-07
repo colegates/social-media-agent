@@ -86,11 +86,11 @@ async function fetchWithRetry(
 
 export async function searchGoogle(
   keywords: string[],
+  apiKey: string | null,
   maxResults = 10
 ): Promise<RawTrendItem[]> {
-  const apiKey = process.env.SERPAPI_API_KEY;
   if (!apiKey) {
-    sourceLogger.warn('SERPAPI_API_KEY not set, skipping Google search');
+    sourceLogger.warn('SerpAPI key not configured, skipping Google search');
     return [];
   }
 
@@ -113,7 +113,6 @@ export async function searchGoogle(
     }
 
     const results: RawTrendItem[] = [];
-
     for (const item of data.organic_results ?? []) {
       if (!item.title) continue;
       results.push({
@@ -137,11 +136,11 @@ export async function searchGoogle(
 
 export async function searchGoogleNews(
   keywords: string[],
+  apiKey: string | null,
   maxResults = 10
 ): Promise<RawTrendItem[]> {
-  const apiKey = process.env.SERPAPI_API_KEY;
   if (!apiKey) {
-    sourceLogger.warn('SERPAPI_API_KEY not set, skipping Google News search');
+    sourceLogger.warn('SerpAPI key not configured, skipping Google News search');
     return [];
   }
 
@@ -185,11 +184,11 @@ export async function searchGoogleNews(
 
 export async function searchYouTube(
   keywords: string[],
+  apiKey: string | null,
   maxResults = 10
 ): Promise<RawTrendItem[]> {
-  const apiKey = process.env.SERPAPI_API_KEY;
   if (!apiKey) {
-    sourceLogger.warn('SERPAPI_API_KEY not set, skipping YouTube search');
+    sourceLogger.warn('SerpAPI key not configured, skipping YouTube search');
     return [];
   }
 
