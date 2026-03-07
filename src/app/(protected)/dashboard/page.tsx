@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { eq, and, desc, gte, inArray, count, isNotNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
-import { topics, trends, scanJobs, contentIdeas } from '@/db/schema';
+import { topics, trends, scanJobs, contentIdeas, generatedContent, automationRules, automationLogs } from '@/db/schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/lib/button-variants';
-import { TrendingUp, BookMarked, Zap, RefreshCw, Lightbulb } from 'lucide-react';
+import { TrendingUp, BookMarked, Zap, RefreshCw, Lightbulb, Bot, ClipboardCheck, Activity, CheckCircle2, AlertCircle } from 'lucide-react';
 import { TrendsList } from '@/components/features/trends/TrendsList';
 import { PlatformIcon, getPlatformLabel } from '@/components/features/ideas/PlatformIcon';
 import type { TrendCardData } from '@/components/features/trends/TrendCard';
@@ -42,7 +42,9 @@ export default async function DashboardPage() {
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const [recentTrendsRaw, recentScans, ideaStats, todayApprovedIdeas] = await Promise.all([
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [recentTrendsRaw, recentScans, ideaStats, todayApprovedIdeas, reviewQueueCount, activeRulesCount, recentAutomationLogs] = await Promise.all([
       topicIds.length > 0
         ? db
             .select({
@@ -99,6 +101,26 @@ export default async function DashboardPage() {
             .orderBy(desc(contentIdeas.priorityScore))
             .limit(5)
         : Promise.resolve([]),
+      // Review queue: completed content awaiting approval
+      db
+        .select({ id: generatedContent.id })
+        .from(generatedContent)
+        .where(and(eq(generatedContent.userId, userId), eq(generatedContent.status, 'completed')))
+        .limit(100)
+        .then((rows) => rows.length),
+      // Active automation rules count
+      db
+        .select({ id: automationRules.id })
+        .from(automationRules)
+        .where(and(eq(automationRules.userId, userId), eq(automationRules.isActive, true)))
+        .then((rows) => rows.length),
+      // Recent automation activity
+      db
+        .select()
+        .from(automationLogs)
+        .where(and(eq(automationLogs.userId, userId), gte(automationLogs.createdAt, oneDayAgo)))
+        .orderBy(desc(automationLogs.createdAt))
+        .limit(5),
     ]);
 
     const statsByStatus = Object.fromEntries(ideaStats.map((r) => [r.status, r.total]));
@@ -139,8 +161,22 @@ export default async function DashboardPage() {
         label: 'Content Ideas',
         value: String(pendingIdeas),
         icon: Lightbulb,
-        description: pendingIdeas === 1 ? 'Awaiting review' : 'Awaiting review',
+        description: 'Awaiting review',
         href: pendingIdeas > 0 ? '/content/ideas?status=suggested' : '/content/ideas',
+      },
+      {
+        label: 'Review Queue',
+        value: String(reviewQueueCount),
+        icon: ClipboardCheck,
+        description: reviewQueueCount === 1 ? 'Item needs review' : 'Items need review',
+        href: '/content/review',
+      },
+      {
+        label: 'Active Rules',
+        value: String(activeRulesCount),
+        icon: Bot,
+        description: 'Automation rules running',
+        href: '/settings/automation',
       },
     ];
 
@@ -160,7 +196,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Stats grid */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {stats.map((stat) => {
             const Icon = stat.icon;
             const cardContent = (
@@ -370,6 +406,77 @@ export default async function DashboardPage() {
                   );
                 })}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Automation Activity */}
+        {recentAutomationLogs.length > 0 && (
+          <Card className="mt-8">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Automation Activity</CardTitle>
+                <CardDescription>Recent automation actions (last 24 hours)</CardDescription>
+              </div>
+              <Activity className="text-muted-foreground h-5 w-5" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {recentAutomationLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="border-border flex items-center gap-3 rounded-lg border px-3 py-2"
+                  >
+                    <div
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        log.status === 'success'
+                          ? 'bg-green-500'
+                          : log.status === 'failed'
+                            ? 'bg-red-500'
+                            : 'bg-yellow-500'
+                      }`}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm">{log.action}</span>
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {new Date(log.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 text-center">
+                <Link
+                  href="/settings/automation"
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  View all automation activity
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quick links for automation when no activity */}
+        {recentAutomationLogs.length === 0 && activeRulesCount === 0 && hasTopics && (
+          <Card className="mt-8">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Set Up Automation</CardTitle>
+                <CardDescription>Let the pipeline work for you automatically</CardDescription>
+              </div>
+              <Bot className="text-muted-foreground h-5 w-5" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4 text-sm">
+                Create automation rules to automatically approve ideas, generate content, and get
+                notified when trends are discovered — all without manual intervention.
+              </p>
+              <Link
+                href="/settings/automation"
+                className={buttonVariants({ variant: 'default', size: 'sm' })}
+              >
+                <Bot className="mr-1.5 h-4 w-4" />
+                Create first automation rule
+              </Link>
             </CardContent>
           </Card>
         )}

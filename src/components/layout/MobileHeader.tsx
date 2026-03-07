@@ -2,6 +2,7 @@
 
 import { Zap } from 'lucide-react';
 import { UserMenu } from './UserMenu';
+import { NotificationBell } from '@/components/features/notifications/NotificationBell';
 
 interface MobileHeaderProps {
   title?: string;
@@ -14,7 +15,10 @@ export function MobileHeader({ title }: MobileHeaderProps) {
         <Zap className="text-primary h-5 w-5" />
         <span className="font-semibold">{title ?? 'Social Agent'}</span>
       </div>
-      <UserMenu />
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        <UserMenu />
+      </div>
     </header>
   );
 }

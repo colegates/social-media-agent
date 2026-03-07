@@ -464,6 +464,184 @@ export type GeneratedContent = typeof generatedContent.$inferSelect;
 export type NewGeneratedContent = typeof generatedContent.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// Automation Rules
+// ─────────────────────────────────────────────────────────
+
+export const triggerTypeEnum = pgEnum('trigger_type', [
+  'after_scan',
+  'scheduled',
+  'manual',
+]);
+
+export type TriggerType = (typeof triggerTypeEnum.enumValues)[number];
+
+export const automationRules = pgTable(
+  'automation_rules',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    topicId: uuid('topic_id').references(() => topics.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    triggerType: triggerTypeEnum('trigger_type').notNull(),
+    actions: jsonb('actions').notNull().default([]),
+    conditions: jsonb('conditions').notNull().default({}),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_automation_rules_user_id').on(table.userId),
+    index('idx_automation_rules_topic_id').on(table.topicId),
+    index('idx_automation_rules_is_active').on(table.isActive),
+    index('idx_automation_rules_trigger_type').on(table.triggerType),
+  ]
+);
+
+export type AutomationRule = typeof automationRules.$inferSelect;
+export type NewAutomationRule = typeof automationRules.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'new_trends',
+  'ideas_ready',
+  'content_generated',
+  'review_needed',
+  'auto_published',
+  'error',
+]);
+
+export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: notificationTypeEnum('type').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    data: jsonb('data').default({}).notNull(),
+    isRead: boolean('is_read').notNull().default(false),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_notifications_user_id').on(table.userId),
+    index('idx_notifications_is_read').on(table.isRead),
+    index('idx_notifications_user_unread').on(table.userId, table.isRead),
+    index('idx_notifications_created_at').on(table.createdAt),
+  ]
+);
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Push Subscriptions
+// ─────────────────────────────────────────────────────────
+
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dhKey: text('p256dh_key').notNull(),
+    authKey: text('auth_key').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_push_subscriptions_user_id').on(table.userId)]
+);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Automation Logs
+// ─────────────────────────────────────────────────────────
+
+export const automationLogStatusEnum = pgEnum('automation_log_status', [
+  'success',
+  'skipped',
+  'failed',
+]);
+
+export type AutomationLogStatus = (typeof automationLogStatusEnum.enumValues)[number];
+
+export const automationLogs = pgTable(
+  'automation_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    ruleId: uuid('rule_id').references(() => automationRules.id, { onDelete: 'set null' }),
+    topicId: uuid('topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    status: automationLogStatusEnum('status').notNull(),
+    details: jsonb('details').default({}).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_automation_logs_user_id').on(table.userId),
+    index('idx_automation_logs_rule_id').on(table.ruleId),
+    index('idx_automation_logs_topic_id').on(table.topicId),
+    index('idx_automation_logs_created_at').on(table.createdAt),
+  ]
+);
+
+export type AutomationLog = typeof automationLogs.$inferSelect;
+export type NewAutomationLog = typeof automationLogs.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
+// Publish History
+// ─────────────────────────────────────────────────────────
+
+export const publishStatusEnum = pgEnum('publish_status', [
+  'published',
+  'failed',
+  'scheduled',
+]);
+
+export type PublishStatus = (typeof publishStatusEnum.enumValues)[number];
+
+export const publishHistory = pgTable(
+  'publish_history',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    contentId: uuid('content_id')
+      .notNull()
+      .references(() => generatedContent.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    platform: text('platform').notNull(),
+    publishedAt: timestamp('published_at', { mode: 'date' }).defaultNow().notNull(),
+    externalId: text('external_id'),
+    status: publishStatusEnum('status').notNull(),
+    errorMessage: text('error_message'),
+  },
+  (table) => [
+    index('idx_publish_history_content_id').on(table.contentId),
+    index('idx_publish_history_user_id').on(table.userId),
+    index('idx_publish_history_platform').on(table.platform),
+    index('idx_publish_history_status').on(table.status),
+    index('idx_publish_history_published_at').on(table.publishedAt),
+  ]
+);
+
+export type PublishHistory = typeof publishHistory.$inferSelect;
+export type NewPublishHistory = typeof publishHistory.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Relations
 // ─────────────────────────────────────────────────────────
 
@@ -473,6 +651,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(userApiKeys),
   contentIdeas: many(contentIdeas),
   generatedContent: many(generatedContent),
+  automationRules: many(automationRules),
+  notifications: many(notifications),
+  pushSubscriptions: many(pushSubscriptions),
+  automationLogs: many(automationLogs),
+  publishHistory: many(publishHistory),
 }));
 
 export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
@@ -485,6 +668,8 @@ export const topicsRelations = relations(topics, ({ one, many }) => ({
   trends: many(trends),
   scanJobs: many(scanJobs),
   contentIdeas: many(contentIdeas),
+  automationRules: many(automationRules),
+  automationLogs: many(automationLogs),
 }));
 
 export const topicSourcesRelations = relations(topicSources, ({ one }) => ({
@@ -511,10 +696,37 @@ export const contentIdeasRelations = relations(contentIdeas, ({ one, many }) => 
   generatedContent: many(generatedContent),
 }));
 
-export const generatedContentRelations = relations(generatedContent, ({ one }) => ({
+export const generatedContentRelations = relations(generatedContent, ({ one, many }) => ({
   contentIdea: one(contentIdeas, {
     fields: [generatedContent.contentIdeaId],
     references: [contentIdeas.id],
   }),
   user: one(users, { fields: [generatedContent.userId], references: [users.id] }),
+  publishHistory: many(publishHistory),
 }));
+
+export const automationRulesRelations = relations(automationRules, ({ one, many }) => ({
+  user: one(users, { fields: [automationRules.userId], references: [users.id] }),
+  topic: one(topics, { fields: [automationRules.topicId], references: [topics.id] }),
+  logs: many(automationLogs),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, { fields: [pushSubscriptions.userId], references: [users.id] }),
+}));
+
+export const automationLogsRelations = relations(automationLogs, ({ one }) => ({
+  user: one(users, { fields: [automationLogs.userId], references: [users.id] }),
+  rule: one(automationRules, { fields: [automationLogs.ruleId], references: [automationRules.id] }),
+  topic: one(topics, { fields: [automationLogs.topicId], references: [topics.id] }),
+}));
+
+export const publishHistoryRelations = relations(publishHistory, ({ one }) => ({
+  content: one(generatedContent, { fields: [publishHistory.contentId], references: [generatedContent.id] }),
+  user: one(users, { fields: [publishHistory.userId], references: [users.id] }),
+}));
+
