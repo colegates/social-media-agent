@@ -45,6 +45,12 @@ export function handleApiError(error: unknown, log: Logger): NextResponse<ApiErr
     if (error.message.includes('unique constraint')) {
       return apiError('CONFLICT', 'A resource with this identifier already exists');
     }
+    if (error.message.includes('ENCRYPTION_KEY')) {
+      return apiError(
+        'SERVICE_UNAVAILABLE',
+        'Server encryption key is not configured. Set the ENCRYPTION_KEY environment variable in your Render dashboard.'
+      );
+    }
   }
 
   return apiError('INTERNAL_ERROR', 'An unexpected error occurred');
