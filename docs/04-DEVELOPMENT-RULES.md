@@ -266,6 +266,26 @@ All API errors MUST return this format:
 6. **Rate limit respect:** Implement rate limiting on our side, don't rely on hitting the API's rate limit
 7. **Never expose keys:** All 3rd party API calls go through our backend. Never call from the client.
 8. **Wrapper pattern:** Each external API gets its own service file with typed inputs/outputs
+9. **3rd party service documentation rule:** Whenever any UI location in the app references or requires an API key or credential for a 3rd party service (e.g. an API Keys settings page, an integration card, a setup wizard), that location MUST include:
+   - The **full name** of the service
+   - A **direct link** to the service's sign-up or API key page (as a clickable anchor)
+   - A **short description** of what the service does and why it is needed by this app
+   - **Step-by-step setup instructions** explaining exactly how to obtain the key and which environment variable to set
+   - These details must live in the UI itself (tooltip, helper text, expandable instructions, or a dedicated setup guide card) — not only in external docs
+   - Example pattern:
+     ```tsx
+     <IntegrationCard
+       name="Anthropic Claude"
+       description="Powers AI content generation and style analysis."
+       signUpUrl="https://console.anthropic.com"
+       envVar="ANTHROPIC_API_KEY"
+       instructions={[
+         'Create an account at console.anthropic.com',
+         'Go to API Keys and click Create Key',
+         'Copy the key and add it to your .env.local as ANTHROPIC_API_KEY=sk-ant-...',
+       ]}
+     />
+     ```
 
 ---
 

@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { User, Bell, Palette, Key } from 'lucide-react';
+import { User, Bell, Palette, Key, ChevronRight } from 'lucide-react';
+import { LogoutButton } from '@/components/features/settings/LogoutButton';
 
 export const metadata: Metadata = {
   title: 'Settings',
@@ -42,13 +44,22 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Style Profile - active link */}
+        <Link href="/settings/style">
+          <Card className="hover:bg-accent/50 cursor-pointer transition-colors">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Palette className="h-4 w-4" />
+                Style Profile
+                <ChevronRight className="text-muted-foreground ml-auto h-4 w-4" />
+              </CardTitle>
+              <CardDescription>Configure your brand voice and style for AI generation</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         {/* Coming soon sections */}
         {[
-          {
-            icon: Palette,
-            title: 'Style Profile',
-            description: 'Configure your brand voice and style',
-          },
           {
             icon: Bell,
             title: 'Notifications',
@@ -72,6 +83,17 @@ export default async function SettingsPage() {
             </Card>
           );
         })}
+
+        {/* Sign out */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Account</CardTitle>
+            <CardDescription>Manage your session</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LogoutButton />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

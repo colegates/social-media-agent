@@ -15,6 +15,13 @@
       "when": 1772881571178,
       "tag": "0001_workable_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772886459932,
+      "tag": "0002_bored_baron_zemo",
+      "breakpoints": true
     }
   ]
 }
