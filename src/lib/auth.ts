@@ -8,6 +8,8 @@ import { loginSchema } from '@/lib/validators/auth';
 import { logger } from '@/lib/logger';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Required when running behind a reverse proxy (e.g. Render, Vercel, AWS)
+  trustHost: true,
   // JWT strategy - no database adapter needed for session storage
   session: {
     strategy: 'jwt',
