@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { getUserApiKeys } from '@/lib/services/api-keys';
 import { searchGoogle, searchGoogleNews, searchYouTube } from './sources/serpapi';
 import { scrapeTikTok, scrapeInstagram } from './sources/apify';
-import { fetchSubredditPosts, searchReddit } from './sources/reddit';
+import { fetchSubredditPosts, searchReddit, parseRedditCredentials } from './sources/reddit';
 import { searchTweets } from './sources/twitter';
 import { scoreTrends } from './scoring';
 import type { RawTrendItem } from './types';
@@ -44,7 +44,7 @@ export async function runTrendScan(
         where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
         with: { sources: true },
       }),
-      getUserApiKeys(userId, ['anthropic', 'serpapi', 'apify', 'twitter']),
+      getUserApiKeys(userId, ['anthropic', 'serpapi', 'apify', 'twitter', 'reddit']),
     ]);
 
     if (!topic) {
@@ -64,7 +64,8 @@ export async function runTrendScan(
     if (userKeys.twitter) sourcesConfigured.push('twitter');
     else sourcesMissing.push('twitter');
 
-    sourcesConfigured.push('reddit'); // always available, no key needed
+    const redditCredentials = parseRedditCredentials(userKeys.reddit ?? null);
+    sourcesConfigured.push('reddit'); // works anonymously, or authenticated if credentials provided
 
     jobLogger.info(
       { topicName: topic.name, sourcesConfigured, sourcesMissing },
@@ -95,8 +96,10 @@ export async function runTrendScan(
       searchTweets(allKeywords, userKeys.twitter ?? null, 20),
       scrapeTikTok(allKeywords, userKeys.apify ?? null, 20),
       scrapeInstagram(allHashtags, userKeys.apify ?? null, 20),
-      searchReddit(allKeywords, subreddits, 10),
-      ...subreddits.slice(0, 5).map((sub) => fetchSubredditPosts(sub, 'hot', 10)),
+      searchReddit(allKeywords, subreddits, 10, redditCredentials),
+      ...subreddits
+        .slice(0, 5)
+        .map((sub) => fetchSubredditPosts(sub, 'hot', 10, redditCredentials)),
     ]);
 
     const allItems: RawTrendItem[] = [];

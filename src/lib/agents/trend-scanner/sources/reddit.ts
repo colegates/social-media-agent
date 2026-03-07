@@ -5,6 +5,7 @@ import { ExternalApiError } from '../types';
 const sourceLogger = logger.child({ module: 'trend-scanner', source: 'reddit' });
 
 const REDDIT_BASE_URL = 'https://www.reddit.com';
+const OAUTH_BASE_URL = 'https://oauth.reddit.com';
 const TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 3;
 // Reddit allows 60 req/min for anonymous; keep well under
@@ -12,7 +13,72 @@ const REQUEST_DELAY_MS = 1200;
 
 let lastRequestTime = 0;
 
-async function rateLimitedFetch(url: string, attempt = 0): Promise<unknown> {
+export interface RedditCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+/**
+ * Parse stored Reddit credentials JSON (from user_api_keys).
+ * Returns null if the stored value is missing or invalid.
+ */
+export function parseRedditCredentials(
+  storedKey: string | null | undefined
+): RedditCredentials | null {
+  if (!storedKey) return null;
+  try {
+    const parsed = JSON.parse(storedKey) as { clientId?: string; clientSecret?: string };
+    if (!parsed.clientId || !parsed.clientSecret) return null;
+    return { clientId: parsed.clientId, clientSecret: parsed.clientSecret };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get a Reddit OAuth access token using client_credentials flow.
+ */
+async function getOAuthToken(credentials: RedditCredentials): Promise<string> {
+  const encoded = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString(
+    'base64'
+  );
+
+  const res = await fetch('https://www.reddit.com/api/v1/access_token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${encoded}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'social-media-agent/0.1.0',
+    },
+    body: 'grant_type=client_credentials',
+  });
+
+  if (!res.ok) {
+    throw new ExternalApiError(
+      'auth_error',
+      `Reddit OAuth failed: ${res.status}`,
+      'reddit',
+      res.status
+    );
+  }
+
+  const data = (await res.json()) as { access_token?: string; error?: string };
+  if (!data.access_token) {
+    throw new ExternalApiError(
+      'auth_error',
+      `Reddit OAuth error: ${data.error ?? 'no token'}`,
+      'reddit'
+    );
+  }
+
+  return data.access_token;
+}
+
+async function rateLimitedFetch(
+  url: string,
+  extraHeaders: Record<string, string> = {},
+  attempt = 0
+): Promise<unknown> {
   // Enforce rate limit
   const now = Date.now();
   const timeSinceLast = now - lastRequestTime;
@@ -31,6 +97,7 @@ async function rateLimitedFetch(url: string, attempt = 0): Promise<unknown> {
       headers: {
         'User-Agent': 'social-media-agent/0.1.0 (by /u/social_media_agent_bot)',
         Accept: 'application/json',
+        ...extraHeaders,
       },
     });
     clearTimeout(timeout);
@@ -43,7 +110,7 @@ async function rateLimitedFetch(url: string, attempt = 0): Promise<unknown> {
         const retryAfter = parseInt(response.headers.get('retry-after') ?? '60', 10);
         sourceLogger.warn({ retryAfter, attempt }, 'Reddit rate limited, waiting');
         await new Promise((r) => setTimeout(r, retryAfter * 1000));
-        return rateLimitedFetch(url, attempt + 1);
+        return rateLimitedFetch(url, extraHeaders, attempt + 1);
       }
       throw new ExternalApiError('rate_limit', 'Reddit rate limit exceeded', 'reddit', 429);
     }
@@ -51,11 +118,19 @@ async function rateLimitedFetch(url: string, attempt = 0): Promise<unknown> {
     if (!response.ok) {
       if (attempt < MAX_RETRIES) {
         const delay = Math.pow(2, attempt) * 1000;
-        sourceLogger.warn({ attempt, delay, status: response.status }, 'Reddit request failed, retrying');
+        sourceLogger.warn(
+          { attempt, delay, status: response.status },
+          'Reddit request failed, retrying'
+        );
         await new Promise((r) => setTimeout(r, delay));
-        return rateLimitedFetch(url, attempt + 1);
+        return rateLimitedFetch(url, extraHeaders, attempt + 1);
       }
-      throw new ExternalApiError('api_error', `Reddit API returned ${response.status}`, 'reddit', response.status);
+      throw new ExternalApiError(
+        'api_error',
+        `Reddit API returned ${response.status}`,
+        'reddit',
+        response.status
+      );
     }
 
     return response.json();
@@ -66,7 +141,7 @@ async function rateLimitedFetch(url: string, attempt = 0): Promise<unknown> {
       const delay = Math.pow(2, attempt) * 1000;
       sourceLogger.warn({ attempt, delay, err }, 'Reddit fetch error, retrying');
       await new Promise((r) => setTimeout(r, delay));
-      return rateLimitedFetch(url, attempt + 1);
+      return rateLimitedFetch(url, extraHeaders, attempt + 1);
     }
 
     throw new ExternalApiError('network_error', `Reddit network error: ${String(err)}`, 'reddit');
@@ -104,24 +179,39 @@ function parseRedditResponse(raw: unknown): RedditPost[] {
 export async function fetchSubredditPosts(
   subreddit: string,
   sort: 'hot' | 'rising' | 'top' = 'hot',
-  limit = 10
+  limit = 10,
+  credentials?: RedditCredentials | null
 ): Promise<RawTrendItem[]> {
   // Clean up subreddit input
   const sub = subreddit.replace(/^\/?(r\/)?/, '').split('/')[0];
-  const url = `${REDDIT_BASE_URL}/r/${sub}/${sort}.json?limit=${limit}&t=day`;
 
-  sourceLogger.info({ subreddit: sub, sort, limit }, 'Fetching Reddit posts');
+  let headers: Record<string, string> = {};
+  let baseUrl = REDDIT_BASE_URL;
+
+  if (credentials) {
+    try {
+      const token = await getOAuthToken(credentials);
+      headers = { Authorization: `Bearer ${token}` };
+      baseUrl = OAUTH_BASE_URL;
+    } catch (err) {
+      sourceLogger.warn({ err }, 'Reddit OAuth failed, falling back to anonymous access');
+    }
+  }
+
+  const url = `${baseUrl}/r/${sub}/${sort}.json?limit=${limit}&t=day`;
+  sourceLogger.info(
+    { subreddit: sub, sort, limit, authenticated: Boolean(credentials) },
+    'Fetching Reddit posts'
+  );
 
   try {
-    const raw = await rateLimitedFetch(url);
+    const raw = await rateLimitedFetch(url, headers);
     const posts = parseRedditResponse(raw);
 
     const results: RawTrendItem[] = posts.map((post) => ({
       title: post.title ?? '',
       description: post.selftext ? post.selftext.slice(0, 500) : undefined,
-      sourceUrl: post.permalink
-        ? `${REDDIT_BASE_URL}${post.permalink}`
-        : post.url,
+      sourceUrl: post.permalink ? `${REDDIT_BASE_URL}${post.permalink}` : post.url,
       platform: 'reddit' as const,
       engagementData: {
         upvotes: post.score ?? post.ups ?? 0,
@@ -143,27 +233,43 @@ export async function fetchSubredditPosts(
 export async function searchReddit(
   keywords: string[],
   subreddits: string[] = [],
-  limit = 10
+  limit = 10,
+  credentials?: RedditCredentials | null
 ): Promise<RawTrendItem[]> {
   const query = keywords.slice(0, 5).join(' ');
-  const subredditFilter = subreddits.length > 0
-    ? `subreddit:${subreddits.map((s) => s.replace(/^\/?(r\/)?/, '')).join('+')}`
-    : '';
+  const subredditFilter =
+    subreddits.length > 0
+      ? `subreddit:${subreddits.map((s) => s.replace(/^\/?(r\/)?/, '')).join('+')}`
+      : '';
   const fullQuery = [query, subredditFilter].filter(Boolean).join(' ');
-  const url = `${REDDIT_BASE_URL}/search.json?q=${encodeURIComponent(fullQuery)}&sort=top&t=day&limit=${limit}`;
 
-  sourceLogger.info({ query: fullQuery, limit }, 'Searching Reddit');
+  let headers: Record<string, string> = {};
+  let baseUrl = REDDIT_BASE_URL;
+
+  if (credentials) {
+    try {
+      const token = await getOAuthToken(credentials);
+      headers = { Authorization: `Bearer ${token}` };
+      baseUrl = OAUTH_BASE_URL;
+    } catch (err) {
+      sourceLogger.warn({ err }, 'Reddit OAuth failed, falling back to anonymous access');
+    }
+  }
+
+  const url = `${baseUrl}/search.json?q=${encodeURIComponent(fullQuery)}&sort=top&t=day&limit=${limit}`;
+  sourceLogger.info(
+    { query: fullQuery, limit, authenticated: Boolean(credentials) },
+    'Searching Reddit'
+  );
 
   try {
-    const raw = await rateLimitedFetch(url);
+    const raw = await rateLimitedFetch(url, headers);
     const posts = parseRedditResponse(raw);
 
     const results: RawTrendItem[] = posts.map((post) => ({
       title: post.title ?? '',
       description: post.selftext ? post.selftext.slice(0, 500) : undefined,
-      sourceUrl: post.permalink
-        ? `${REDDIT_BASE_URL}${post.permalink}`
-        : post.url,
+      sourceUrl: post.permalink ? `${REDDIT_BASE_URL}${post.permalink}` : post.url,
       platform: 'reddit' as const,
       engagementData: {
         upvotes: post.score ?? post.ups ?? 0,

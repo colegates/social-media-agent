@@ -74,12 +74,8 @@ const PLATFORM_CONFIG: Record<
 // Client & helpers
 // ─────────────────────────────────────────────────────────
 
-function getClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
-  }
-  return new Anthropic({ apiKey });
+function getClient(anthropicKey: string): Anthropic {
+  return new Anthropic({ apiKey: anthropicKey });
 }
 
 function estimateCost(inputTokens: number, outputTokens: number): number {
@@ -131,7 +127,8 @@ export async function generateSocialCopy(
   ideaDescription: string,
   suggestedCopy: string,
   styleProfile: StyleProfile | null,
-  platform: ContentIdeaPlatform
+  platform: ContentIdeaPlatform,
+  anthropicKey: string
 ): Promise<SocialCopyResult> {
   const copyLogger = logger.child({ fn: 'generateSocialCopy', platform });
   const config = PLATFORM_CONFIG[platform];
@@ -159,7 +156,7 @@ Write the ${config.name} copy:`;
 
   const response = await withRetry(
     () =>
-      getClient().messages.create({
+      getClient(anthropicKey).messages.create({
         model: GENERATION_MODEL,
         max_tokens: 1024,
         system: systemPrompt,
@@ -208,7 +205,8 @@ export async function generateBlogArticle(
   ideaTitle: string,
   ideaDescription: string,
   styleProfile: StyleProfile | null,
-  options: BlogArticleOptions = {}
+  options: BlogArticleOptions = {},
+  anthropicKey: string
 ): Promise<BlogArticleResult> {
   const blogLogger = logger.child({ fn: 'generateBlogArticle' });
   const { wordCount = 800, seoKeywords = [] } = options;
@@ -240,7 +238,7 @@ Article:`;
 
   const response = await withRetry(
     () =>
-      getClient().messages.create({
+      getClient(anthropicKey).messages.create({
         model: GENERATION_MODEL,
         max_tokens: 4096,
         system: systemPrompt,
@@ -282,7 +280,8 @@ export interface ThreadResult {
 export async function generateThread(
   ideaTitle: string,
   ideaDescription: string,
-  styleProfile: StyleProfile | null
+  styleProfile: StyleProfile | null,
+  anthropicKey: string
 ): Promise<ThreadResult> {
   const threadLogger = logger.child({ fn: 'generateThread' });
 
@@ -312,7 +311,7 @@ JSON array of tweets:`;
 
   const response = await withRetry(
     () =>
-      getClient().messages.create({
+      getClient(anthropicKey).messages.create({
         model: GENERATION_MODEL,
         max_tokens: 2048,
         system: systemPrompt,
