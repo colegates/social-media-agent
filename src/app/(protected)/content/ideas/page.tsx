@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { and, eq, desc, count } from 'drizzle-orm';
+import { and, eq, desc, count, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
 import { contentIdeas, topics } from '@/db/schema';
@@ -60,7 +60,15 @@ export default async function IdeasPage({ searchParams }: PageProps) {
         ? contentIdeas.scheduledFor
         : contentIdeas.priorityScore;
 
-  const [results, [totalRow], userTopics, statsRows] = await Promise.all([
+  // Load ALL topics (active + inactive) first so we can derive activeTopicIds for stats
+  const userTopics = await db
+    .select({ id: topics.id, name: topics.name, isActive: topics.isActive })
+    .from(topics)
+    .where(eq(topics.userId, userId));
+
+  const activeTopicIds = userTopics.filter((t) => t.isActive).map((t) => t.id);
+
+  const [results, [totalRow], statsRows] = await Promise.all([
     db
       .select({
         id: contentIdeas.id,
@@ -85,17 +93,14 @@ export default async function IdeasPage({ searchParams }: PageProps) {
       .select({ total: count() })
       .from(contentIdeas)
       .where(and(...conditions)),
-    // Load ALL topics (active + inactive) so ideas from inactive topics still show.
-    // Filter to active-only for the filter dropdown below.
-    db
-      .select({ id: topics.id, name: topics.name, isActive: topics.isActive })
-      .from(topics)
-      .where(eq(topics.userId, userId)),
-    db
-      .select({ status: contentIdeas.status, total: count() })
-      .from(contentIdeas)
-      .where(eq(contentIdeas.userId, userId))
-      .groupBy(contentIdeas.status),
+    // Stats only for active topics — inactive topics are excluded from summary counts
+    activeTopicIds.length > 0
+      ? db
+          .select({ status: contentIdeas.status, total: count() })
+          .from(contentIdeas)
+          .where(and(eq(contentIdeas.userId, userId), inArray(contentIdeas.topicId, activeTopicIds)))
+          .groupBy(contentIdeas.status)
+      : Promise.resolve([]),
   ]);
 
   const totalCount = totalRow?.total ?? 0;
