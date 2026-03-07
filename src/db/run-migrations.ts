@@ -100,7 +100,17 @@ async function main() {
       }
     }
 
-    await db.execute(sql`INSERT INTO __migrations (name) VALUES (${name})`);
+    try {
+      await db.execute(sql`INSERT INTO __migrations (name) VALUES (${name})`);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code === '23505') {
+        // Another concurrent process already recorded this migration — that's fine
+        console.log(`[migrate] ${name}: already recorded by concurrent process, continuing`);
+      } else {
+        throw err;
+      }
+    }
     console.log(`[migrate] ${name}: done`);
     appliedCount++;
   }
