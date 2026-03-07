@@ -4,8 +4,9 @@ import { auth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { User, Bell, Palette, Key, ChevronRight } from 'lucide-react';
+import { User, Bell, Palette, Key, ChevronRight, Database } from 'lucide-react';
 import { LogoutButton } from '@/components/features/settings/LogoutButton';
+import { DataManagementClient } from '@/components/features/settings/DataManagementClient';
 
 export const metadata: Metadata = {
   title: 'Settings',
@@ -96,6 +97,23 @@ export default async function SettingsPage() {
             </Card>
           );
         })}
+
+        {/* Data Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Database className="h-4 w-4" />
+              Data Management
+            </CardTitle>
+            <CardDescription>
+              Permanently delete old trends, scan history, or content ideas to keep your workspace
+              clean.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataManagementClient />
+          </CardContent>
+        </Card>
 
         {/* Sign out */}
         <Card>
