@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import {
   ChevronLeft,
   Edit2,
@@ -13,17 +13,20 @@ import {
   MessageSquare,
   Clock,
   Calendar,
-  Zap,
 } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
-import { topics } from '@/db/schema';
+import { topics, trends, scanJobs } from '@/db/schema';
 import type { SourceType } from '@/db/schema';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { SCAN_FREQUENCY_OPTIONS } from '@/lib/validators/topics';
+import { TrendsList } from '@/components/features/trends/TrendsList';
+import { ScanHistory } from '@/components/features/trends/ScanHistory';
+import type { ScanJobSummary } from '@/components/features/trends/ScanHistory';
+import type { TrendCardData } from '@/components/features/trends/TrendCard';
 
 export const metadata: Metadata = {
   title: 'Topic Details',
@@ -68,6 +71,49 @@ export default async function TopicDetailPage({ params }: TopicDetailPageProps) 
   if (!topic) {
     notFound();
   }
+
+  // Fetch recent trends and scan history in parallel
+  const [topicTrends, scanHistory] = await Promise.all([
+    db
+      .select({
+        id: trends.id,
+        title: trends.title,
+        description: trends.description,
+        sourceUrl: trends.sourceUrl,
+        platform: trends.platform,
+        viralityScore: trends.viralityScore,
+        engagementData: trends.engagementData,
+        discoveredAt: trends.discoveredAt,
+        expiresAt: trends.expiresAt,
+      })
+      .from(trends)
+      .where(eq(trends.topicId, id))
+      .orderBy(desc(trends.viralityScore))
+      .limit(20),
+    db
+      .select({
+        id: scanJobs.id,
+        status: scanJobs.status,
+        trendsFound: scanJobs.trendsFound,
+        startedAt: scanJobs.startedAt,
+        completedAt: scanJobs.completedAt,
+        errorLog: scanJobs.errorLog,
+      })
+      .from(scanJobs)
+      .where(eq(scanJobs.topicId, id))
+      .orderBy(desc(scanJobs.startedAt))
+      .limit(10),
+  ]);
+
+  const trendData: TrendCardData[] = topicTrends.map((t) => ({
+    ...t,
+    engagementData: (t.engagementData ?? {}) as Record<string, unknown>,
+  }));
+
+  const scanData: ScanJobSummary[] = scanHistory.map((s) => ({
+    ...s,
+    status: s.status as ScanJobSummary['status'],
+  }));
 
   return (
     <div className="mx-auto max-w-2xl p-4 md:p-6 lg:p-8">
@@ -201,22 +247,31 @@ export default async function TopicDetailPage({ params }: TopicDetailPageProps) 
         </CardContent>
       </Card>
 
-      {/* Scan History (placeholder) */}
-      <Card>
+      {/* Trends */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">
+            Trends{' '}
+            {trendData.length > 0 && (
+              <span className="text-muted-foreground font-normal">({trendData.length})</span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TrendsList
+            trends={trendData}
+            emptyMessage="No trends discovered yet. Run a scan to find trending content for this topic."
+          />
+        </CardContent>
+      </Card>
+
+      {/* Scan History */}
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-base">Scan History</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Zap className="text-muted-foreground mb-3 h-8 w-8" />
-            <p className="text-muted-foreground text-sm">No scans run yet</p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Scan history will appear here once scanning begins
-            </p>
-            <Button disabled className="mt-4" variant="outline" size="sm">
-              Scan Now (coming soon)
-            </Button>
-          </div>
+          <ScanHistory topicId={id} initialScans={scanData} />
         </CardContent>
       </Card>
 
