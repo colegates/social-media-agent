@@ -28,3 +28,4 @@ Always read and follow `/docs/04-DEVELOPMENT-RULES.md` before making any changes
 - TypeScript strict mode, no `any` types
 - Mobile-first responsive design
 - All external API calls: timeout, retry, logging, cost tracking
+- Any UI that references a 3rd party API key MUST include: service name, direct sign-up link, description, and step-by-step setup instructions inline in the UI
