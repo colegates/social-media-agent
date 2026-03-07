@@ -72,12 +72,18 @@ async function main() {
       try {
         await db.execute(sql.raw(stmt));
       } catch (err: unknown) {
-        const code = (err as { code?: string }).code;
-        const message = (err as { message?: string }).message ?? '';
+        // DrizzleQueryError wraps the real DB error in .cause — check both levels
+        const e = err as Record<string, unknown>;
+        const cause = (e.cause ?? {}) as Record<string, unknown>;
+
+        const code = (e.code as string | undefined) ?? (cause.code as string | undefined);
+        const combinedMessage = [String(e.message ?? ''), String(cause.message ?? '')]
+          .join(' ')
+          .toLowerCase();
 
         const alreadyExists =
-          (code && ALREADY_EXISTS_CODES.has(code)) ||
-          message.toLowerCase().includes('already exists');
+          (code !== undefined && ALREADY_EXISTS_CODES.has(code)) ||
+          combinedMessage.includes('already exists');
 
         if (alreadyExists) {
           console.log(
@@ -87,7 +93,7 @@ async function main() {
           console.error(
             `[migrate]   stmt ${i + 1}/${statements.length} FAILED (code=${code ?? 'n/a'}):`
           );
-          console.error(`[migrate]   ${message}`);
+          console.error(`[migrate]   ${String(cause.message ?? e.message ?? '')}`);
           console.error(`[migrate]   sql: ${stmt.slice(0, 300)}`);
           process.exit(1);
         }
