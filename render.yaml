@@ -19,7 +19,7 @@ services:
         sync: false
       - key: NEXTAUTH_URL
         sync: false
-      - key: NEXTAUTH_SECRET
+      - key: AUTH_SECRET
         generateValue: true
 
       # Database (Neon PostgreSQL)
