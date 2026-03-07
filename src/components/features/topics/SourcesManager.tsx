@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import type { SourceType } from '@/db/schema';
-import { SOURCE_TYPES } from '@/lib/validators/topics';
+import { SOURCE_TYPES, SUPPORTED_SCAN_PLATFORMS } from '@/lib/validators/topics';
 
 export interface PendingSource {
   id: string;
@@ -65,6 +65,21 @@ export function SourcesManager({
 
   function handleAdd() {
     const trimmedValue = value.trim();
+
+    if (type === 'platform') {
+      const validPlatform = SUPPORTED_SCAN_PLATFORMS.find((p) => p.value === trimmedValue);
+      if (!validPlatform) {
+        setError('Please select a valid platform');
+        return;
+      }
+      onAdd({ type, value: trimmedValue, label: label.trim() || validPlatform.label });
+      setValue(SUPPORTED_SCAN_PLATFORMS[0].value);
+      setLabel('');
+      setError('');
+      setSheetOpen(false);
+      return;
+    }
+
     if (!trimmedValue) {
       setError('Please enter a value');
       return;
@@ -157,9 +172,10 @@ export function SourcesManager({
                 id="source-type"
                 value={type}
                 onChange={(e) => {
-                  setType(e.target.value as SourceType);
+                  const newType = e.target.value as SourceType;
+                  setType(newType);
                   setError('');
-                  setValue('');
+                  setValue(newType === 'platform' ? SUPPORTED_SCAN_PLATFORMS[0].value : '');
                 }}
               >
                 {SOURCE_TYPES.map((t) => (
@@ -174,17 +190,34 @@ export function SourcesManager({
               <Label htmlFor="source-value">
                 {SOURCE_CONFIG[type].label} URL / Handle
               </Label>
-              <Input
-                id="source-value"
-                type="text"
-                value={value}
-                onChange={(e) => {
-                  setValue(e.target.value);
-                  setError('');
-                }}
-                placeholder={SOURCE_CONFIG[type].placeholder}
-                aria-invalid={!!error}
-              />
+              {type === 'platform' ? (
+                <Select
+                  id="source-value"
+                  value={value}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    setError('');
+                  }}
+                >
+                  {SUPPORTED_SCAN_PLATFORMS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  id="source-value"
+                  type="text"
+                  value={value}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    setError('');
+                  }}
+                  placeholder={SOURCE_CONFIG[type].placeholder}
+                  aria-invalid={!!error}
+                />
+              )}
               {error && <p className="text-destructive text-xs">{error}</p>}
             </div>
 
@@ -211,7 +244,7 @@ export function SourcesManager({
                 variant="outline"
                 onClick={() => {
                   setSheetOpen(false);
-                  setValue('');
+                  setValue(type === 'platform' ? SUPPORTED_SCAN_PLATFORMS[0].value : '');
                   setLabel('');
                   setError('');
                 }}
