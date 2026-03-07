@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Clock,
   Calendar,
+  Layers,
 } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { db } from '@/db';
@@ -43,6 +44,7 @@ const SOURCE_ICONS: Record<SourceType, React.ComponentType<{ className?: string 
   hashtag: Hash,
   search_term: Search,
   competitor_account: Users,
+  platform: Layers,
 };
 
 const SOURCE_LABELS: Record<SourceType, string> = {
@@ -52,6 +54,7 @@ const SOURCE_LABELS: Record<SourceType, string> = {
   hashtag: 'Hashtag',
   search_term: 'Search Term',
   competitor_account: 'Competitor',
+  platform: 'Platform',
 };
 
 function getFrequencyLabel(minutes: number): string {
