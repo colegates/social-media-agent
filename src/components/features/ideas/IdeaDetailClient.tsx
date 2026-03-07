@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Check, X, Edit2, Loader2, Calendar, ExternalLink } from 'lucide-react';
+import { Check, X, Edit2, Loader2, Calendar, ExternalLink, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -153,33 +154,41 @@ export function IdeaDetailClient({ idea: initialIdea }: IdeaDetailClientProps) {
           <p className="text-muted-foreground text-sm leading-relaxed">{idea.description}</p>
 
           {/* Quick actions */}
-          {idea.status === 'suggested' && (
-            <div className="mt-4 flex gap-2">
-              <Button
-                size="sm"
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => handleAction('approve')}
-                disabled={isActioning}
-              >
-                {isActioning ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-                Approve Idea
+          <div className="mt-4 flex flex-wrap gap-2">
+            {idea.status === 'suggested' && (
+              <>
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => handleAction('approve')}
+                  disabled={isActioning}
+                >
+                  {isActioning ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  Approve Idea
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50"
+                  onClick={() => handleAction('reject')}
+                  disabled={isActioning}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Reject
+                </Button>
+              </>
+            )}
+            <Link href={`/content/studio/${idea.id}`}>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                Generate Content
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-rose-200 text-rose-600 hover:bg-rose-50"
-                onClick={() => handleAction('reject')}
-                disabled={isActioning}
-              >
-                <X className="h-3.5 w-3.5" />
-                Reject
-              </Button>
-            </div>
-          )}
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
