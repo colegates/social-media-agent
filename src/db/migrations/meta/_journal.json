@@ -8,6 +8,13 @@
       "when": 1772878183378,
       "tag": "0000_wealthy_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772881571178,
+      "tag": "0001_workable_sauron",
+      "breakpoints": true
     }
   ]
 }
