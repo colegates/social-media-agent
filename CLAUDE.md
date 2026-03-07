@@ -21,6 +21,8 @@ All project documentation is in `/docs/`:
 
 ## Development Rules
 
+> **MANDATORY:** Before making ANY code change, you MUST read `/docs/04-DEVELOPMENT-RULES.md` in full using the Read tool. Do not skip this step — not even for small or "obvious" changes.
+
 Always read and follow `/docs/04-DEVELOPMENT-RULES.md` before making any changes. Key rules:
 
 - Use Pino logger, never console.log
