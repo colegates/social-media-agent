@@ -113,13 +113,17 @@ function isValidContentType(v: string): v is ContentIdeaContentType {
 /**
  * Uses Claude to generate 2-3 specific, actionable content ideas for a trend.
  * Ideas are tailored to the user's brand voice and returned for at least 2 different platforms.
+ *
+ * @param feedbackContext - Optional summary of the user's past approval/rejection patterns,
+ *   used to bias generation towards what the user tends to like.
  */
 export async function generateIdeasForTrend(
   trend: TrendInput,
   topicName: string,
   topicDescription: string | null,
   styleProfile: StyleProfileInput,
-  anthropicApiKey: string
+  anthropicApiKey: string,
+  feedbackContext: string | null = null
 ): Promise<GeneratedIdea[]> {
   const client = new Anthropic({ apiKey: anthropicApiKey });
   const model = process.env.CLAUDE_MODEL ?? DEFAULT_MODEL;
@@ -185,7 +189,11 @@ ${Object.entries(PLATFORM_COPY_GUIDANCE)
   .map(([p, g]) => `${p}: ${g}`)
   .join('\n')}
 
-Generate ideas that authentically connect this trend to the brand's voice. Make the suggestedCopy immediately usable.`;
+Generate ideas that authentically connect this trend to the brand's voice. Make the suggestedCopy immediately usable.${
+    feedbackContext
+      ? `\n\nUSER PREFERENCE FEEDBACK (learned from past approvals/rejections — use to bias your output):\n${feedbackContext}`
+      : ''
+  }`;
 
   const start = Date.now();
 

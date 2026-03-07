@@ -39,11 +39,29 @@ export const SOURCE_TYPES = [
   'hashtag',
   'search_term',
   'competitor_account',
+  'platform',
 ] as const;
+
+/**
+ * Platforms the scanner can query using keyword-based search.
+ * Use these as the `value` when adding a source with type `platform`.
+ */
+export const SUPPORTED_SCAN_PLATFORMS = [
+  { value: 'google', label: 'Google', requiresKey: 'serpapi' },
+  { value: 'youtube', label: 'YouTube', requiresKey: 'serpapi' },
+  { value: 'instagram', label: 'Instagram', requiresKey: 'apify' },
+  { value: 'tiktok', label: 'TikTok', requiresKey: 'apify' },
+  { value: 'twitter', label: 'Twitter / X', requiresKey: 'twitter' },
+  { value: 'reddit', label: 'Reddit', requiresKey: null },
+] as const;
+
+export type SupportedPlatform = (typeof SUPPORTED_SCAN_PLATFORMS)[number]['value'];
 
 export const topicSettingsSchema = z.object({
   autoApproveThreshold: z.number().int().min(0).max(100).nullable().optional(),
   notifyOnNewIdeas: z.boolean().optional(),
+  /** Maximum number of ideas to generate per curation run. null = unlimited. */
+  maxIdeasPerRun: z.number().int().min(1).max(100).nullable().optional(),
 });
 
 export type TopicSettings = z.infer<typeof topicSettingsSchema>;
@@ -73,8 +91,7 @@ export const createTopicSchema = z.object({
     .int()
     .min(1, 'Minimum deduplication window is 1 hour')
     .max(168, 'Maximum deduplication window is 7 days')
-    .optional()
-    .default(24),
+    .optional(), // default (24h) applied at DB and API layer; omitting .default() avoids zodResolver input/output type mismatch
   isActive: z.boolean().optional().default(true),
   settings: topicSettingsSchema.optional(),
 });
@@ -82,6 +99,8 @@ export const createTopicSchema = z.object({
 export const updateTopicSchema = createTopicSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
+
+const SUPPORTED_PLATFORM_VALUES = SUPPORTED_SCAN_PLATFORMS.map((p) => p.value);
 
 export const createSourceSchema = z
   .object({
@@ -107,6 +126,18 @@ export const createSourceSchema = z
       return true;
     },
     { message: 'Must be a valid URL (e.g. https://example.com)', path: ['value'] }
+  )
+  .refine(
+    (data) => {
+      if (data.type === 'platform') {
+        return SUPPORTED_PLATFORM_VALUES.includes(data.value as SupportedPlatform);
+      }
+      return true;
+    },
+    {
+      message: `Platform must be one of: ${SUPPORTED_PLATFORM_VALUES.join(', ')}`,
+      path: ['value'],
+    }
   );
 
 export type CreateTopicInput = z.infer<typeof createTopicSchema>;

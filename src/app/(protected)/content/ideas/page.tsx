@@ -85,10 +85,12 @@ export default async function IdeasPage({ searchParams }: PageProps) {
       .select({ total: count() })
       .from(contentIdeas)
       .where(and(...conditions)),
+    // Load ALL topics (active + inactive) so ideas from inactive topics still show.
+    // Filter to active-only for the filter dropdown below.
     db
-      .select({ id: topics.id, name: topics.name })
+      .select({ id: topics.id, name: topics.name, isActive: topics.isActive })
       .from(topics)
-      .where(and(eq(topics.userId, userId), eq(topics.isActive, true))),
+      .where(eq(topics.userId, userId)),
     db
       .select({ status: contentIdeas.status, total: count() })
       .from(contentIdeas)
@@ -103,6 +105,9 @@ export default async function IdeasPage({ searchParams }: PageProps) {
   const totalGenerated = statsRows.reduce((sum, r) => sum + r.total, 0);
   const totalApproved = statsByStatus.approved ?? 0;
   const totalPending = statsByStatus.suggested ?? 0;
+
+  // Only show active topics in the filter dropdown
+  const activeTopics = userTopics.filter((t) => t.isActive);
 
   const currentFilters: Record<string, string> = {};
   if (topicId) currentFilters.topicId = topicId;
@@ -127,7 +132,7 @@ export default async function IdeasPage({ searchParams }: PageProps) {
           >
             Calendar
           </Link>
-          {userTopics.length > 0 && <GenerateIdeasButton topics={userTopics} />}
+          {activeTopics.length > 0 && <GenerateIdeasButton topics={activeTopics} />}
         </div>
       </div>
 
@@ -152,9 +157,9 @@ export default async function IdeasPage({ searchParams }: PageProps) {
         </Card>
       </div>
 
-      {userTopics.length > 0 && (
+      {activeTopics.length > 0 && (
         <div className="mb-5">
-          <IdeaFilters topics={userTopics} currentFilters={currentFilters} />
+          <IdeaFilters topics={activeTopics} currentFilters={currentFilters} />
         </div>
       )}
 
@@ -165,16 +170,31 @@ export default async function IdeasPage({ searchParams }: PageProps) {
         </p>
       )}
 
-      {userTopics.length === 0 ? (
+      {totalGenerated === 0 ? (
+        // True empty state — no ideas exist at all
         <div className="rounded-lg border border-dashed p-12 text-center">
           <Lightbulb className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
-          <p className="font-medium">No topics yet</p>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Create a topic and run a scan to generate content ideas.
-          </p>
-          <Link href="/topics/new" className={`mt-4 inline-flex ${buttonVariants({ size: 'sm' })}`}>
-            Add a Topic
-          </Link>
+          {userTopics.length === 0 ? (
+            <>
+              <p className="font-medium">No topics yet</p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Create a topic and run a scan to generate content ideas.
+              </p>
+              <Link
+                href="/topics/new"
+                className={`mt-4 inline-flex ${buttonVariants({ size: 'sm' })}`}
+              >
+                Add a Topic
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">No ideas yet</p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Run a scan on one of your topics to generate content ideas.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <IdeasFeed

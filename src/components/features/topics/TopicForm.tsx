@@ -21,6 +21,8 @@ import type { z } from 'zod';
 import {
   createTopicSchema,
   SCAN_FREQUENCY_OPTIONS,
+  CONTENT_GENERATION_FREQUENCY_OPTIONS,
+  DEDUPLICATION_WINDOW_OPTIONS,
   type TopicSettings,
 } from '@/lib/validators/topics';
 
@@ -45,6 +47,10 @@ export function TopicForm({ topic }: TopicFormProps) {
   const [autoApproveThreshold, setAutoApproveThreshold] = useState(
     existingSettings.autoApproveThreshold ?? 75
   );
+  const [maxIdeasEnabled, setMaxIdeasEnabled] = useState(
+    existingSettings.maxIdeasPerRun !== null && existingSettings.maxIdeasPerRun !== undefined
+  );
+  const [maxIdeasPerRun, setMaxIdeasPerRun] = useState(existingSettings.maxIdeasPerRun ?? 10);
 
   const [keywords, setKeywords] = useState<string[]>(topic?.keywords ?? []);
   const [sources, setSources] = useState<PendingSource[]>(
@@ -71,6 +77,8 @@ export function TopicForm({ topic }: TopicFormProps) {
       description: topic?.description ?? '',
       keywords: topic?.keywords ?? [],
       scanFrequencyMinutes: topic?.scanFrequencyMinutes ?? 60,
+      contentGenerationFrequencyMinutes: topic?.contentGenerationFrequencyMinutes ?? undefined,
+      trendDeduplicationWindowHours: topic?.trendDeduplicationWindowHours ?? 24,
     },
   });
 
@@ -104,10 +112,10 @@ export function TopicForm({ topic }: TopicFormProps) {
     try {
       const settings: TopicSettings = {
         autoApproveThreshold: autoApproveEnabled ? autoApproveThreshold : null,
+        maxIdeasPerRun: maxIdeasEnabled ? maxIdeasPerRun : null,
       };
 
       if (isEditing) {
-        // Update topic fields
         const updateRes = await fetch(`/api/topics/${topic.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -118,7 +126,6 @@ export function TopicForm({ topic }: TopicFormProps) {
           throw new Error((err as { error?: string }).error ?? 'Failed to update topic');
         }
 
-        // Add new sources
         for (const id of newSourceIds) {
           const source = sources.find((s) => s.id === id);
           if (!source) continue;
@@ -136,7 +143,6 @@ export function TopicForm({ topic }: TopicFormProps) {
         router.push(`/topics/${topic.id}`);
         router.refresh();
       } else {
-        // Create topic
         const createRes = await fetch('/api/topics', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -149,7 +155,6 @@ export function TopicForm({ topic }: TopicFormProps) {
 
         const { data: newTopic } = (await createRes.json()) as { data: Topic };
 
-        // Add all sources
         for (const source of sources) {
           await fetch(`/api/topics/${newTopic.id}/sources`, {
             method: 'POST',
@@ -211,23 +216,6 @@ export function TopicForm({ topic }: TopicFormProps) {
             </Label>
             <KeywordInput value={keywords} onChange={setKeywords} />
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="scanFrequencyMinutes">Scan Frequency</Label>
-            <Select
-              id="scanFrequencyMinutes"
-              {...register('scanFrequencyMinutes', { valueAsNumber: true })}
-            >
-              {SCAN_FREQUENCY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
-            {errors.scanFrequencyMinutes && (
-              <p className="text-destructive text-xs">{errors.scanFrequencyMinutes.message}</p>
-            )}
-          </div>
         </CardContent>
       </Card>
 
@@ -235,7 +223,9 @@ export function TopicForm({ topic }: TopicFormProps) {
         <CardHeader>
           <CardTitle>Sources</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Add websites, social accounts, subreddits, or hashtags to monitor.
+            Add whole platforms, websites, social accounts, subreddits, or hashtags to monitor.
+            Use <strong>Platform</strong> to scan an entire social network with your keywords — if no
+            platforms are added, all available platforms are scanned.
           </p>
         </CardHeader>
         <CardContent>
@@ -249,6 +239,94 @@ export function TopicForm({ topic }: TopicFormProps) {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Scanning Schedule</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Control how often the app searches for viral topics and how it handles duplicates.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="scanFrequencyMinutes">Web &amp; Social Scan Frequency</Label>
+            <Select
+              id="scanFrequencyMinutes"
+              {...register('scanFrequencyMinutes', { valueAsNumber: true })}
+            >
+              {SCAN_FREQUENCY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              How often to scrape the web and social platforms for new viral topics.
+            </p>
+            {errors.scanFrequencyMinutes && (
+              <p className="text-destructive text-xs">{errors.scanFrequencyMinutes.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="trendDeduplicationWindowHours">Deduplication Window</Label>
+            <Select
+              id="trendDeduplicationWindowHours"
+              {...register('trendDeduplicationWindowHours', { valueAsNumber: true })}
+            >
+              {DEDUPLICATION_WINDOW_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              Trends already seen within this window are skipped, preventing duplicate topics from
+              repeated scans.
+            </p>
+            {errors.trendDeduplicationWindowHours && (
+              <p className="text-destructive text-xs">
+                {errors.trendDeduplicationWindowHours.message}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Content Generation Schedule</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Run content idea generation on its own separate schedule, independent of scanning.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="contentGenerationFrequencyMinutes">Generation Frequency</Label>
+            <Select
+              id="contentGenerationFrequencyMinutes"
+              {...register('contentGenerationFrequencyMinutes', {
+                setValueAs: (v) => (v === '' || v === 'null' ? null : parseInt(v as string)),
+              })}
+            >
+              {CONTENT_GENERATION_FREQUENCY_OPTIONS.map((opt) => (
+                <option key={String(opt.value)} value={opt.value ?? 'null'}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              How often to automatically generate content ideas from recent trends. Set to Disabled
+              to generate manually only.
+            </p>
+            {errors.contentGenerationFrequencyMinutes && (
+              <p className="text-destructive text-xs">
+                {errors.contentGenerationFrequencyMinutes.message}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Automation settings */}
       <Card>
         <CardHeader>
@@ -258,6 +336,50 @@ export function TopicForm({ topic }: TopicFormProps) {
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* Max ideas per run */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <Label htmlFor="maxIdeas" className="font-medium">
+                Limit ideas per generation run
+              </Label>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                Cap the total number of ideas created each time the generator runs. Prevents inbox
+                overload on frequent schedules.
+              </p>
+            </div>
+            <Switch
+              id="maxIdeas"
+              checked={maxIdeasEnabled}
+              onCheckedChange={setMaxIdeasEnabled}
+            />
+          </div>
+
+          {maxIdeasEnabled && (
+            <div className="space-y-2 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">
+                  Max ideas per run:{' '}
+                  <span className="text-primary font-semibold">{maxIdeasPerRun}</span>
+                </Label>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={50}
+                step={1}
+                value={maxIdeasPerRun}
+                onChange={(e) => setMaxIdeasPerRun(parseInt(e.target.value))}
+                className="w-full accent-current"
+                aria-label="Max ideas per run"
+              />
+              <div className="text-muted-foreground flex justify-between text-xs">
+                <span>1</span>
+                <span>25</span>
+                <span>50</span>
+              </div>
+            </div>
+          )}
+
           {/* Auto-approve toggle */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -310,8 +432,7 @@ export function TopicForm({ topic }: TopicFormProps) {
               </div>
               <p className="text-muted-foreground text-xs">
                 Ideas with a priority score of {autoApproveThreshold} or above will be automatically
-                approved. Priority score combines trend virality, brand relevance, platform fit, and
-                timeliness.
+                approved.
               </p>
             </div>
           )}

@@ -149,6 +149,7 @@ export const sourceTypeEnum = pgEnum('source_type', [
   'hashtag',
   'search_term',
   'competitor_account',
+  'platform',
 ]);
 
 export type SourceType = (typeof sourceTypeEnum.enumValues)[number];

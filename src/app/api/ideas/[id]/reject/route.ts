@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { contentIdeas } from '@/db/schema';
 import { logger } from '@/lib/logger';
 import { apiError, handleApiError } from '@/lib/utils/api-error';
+import { recordIdeaRejected } from '@/lib/services/idea-feedback';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -31,6 +32,9 @@ export async function POST(_req: NextRequest, { params }: RouteParams): Promise<
     if (!updated) {
       return apiError('NOT_FOUND', 'Content idea not found');
     }
+
+    // Record feedback signal (non-blocking)
+    void recordIdeaRejected(session.user.id, id);
 
     routeLogger.info({ userId: session.user.id, duration: Date.now() - start }, 'Idea rejected');
 
