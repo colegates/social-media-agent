@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, BookMarked, FileText, Settings, Zap } from 'lucide-react';
+import { LayoutDashboard, BookMarked, FileText, Settings, Zap, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UserMenu } from './UserMenu';
 
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/topics', label: 'Topics', icon: BookMarked },
   { href: '/content', label: 'Content', icon: FileText },
+  { href: '/content/library', label: 'Library', icon: Library },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -16,6 +16,7 @@ import { QUEUE_NAMES, getContentIdeasQueue } from './lib/queue/queues';
 import { initScheduler } from './lib/queue/scheduler';
 import { runTrendScan } from './lib/agents/trend-scanner';
 import { runContentCuration } from './lib/agents/content-curator';
+import { runContentGeneration } from './lib/agents/content-generator';
 import type {
   TrendScanJobData,
   ContentIdeasJobData,
@@ -157,13 +158,42 @@ async function start(): Promise<void> {
         jobId: job.id,
         topicId: job.data.topicId,
         contentIdeaId: job.data.contentIdeaId,
+        jobType: job.data.jobType,
       });
-      jobLogger.info('Content generation job received (Stage 6 - not yet implemented)');
-      // Stage 6 will implement this
+
+      const startTime = Date.now();
+      jobLogger.info('Content generation job started');
+
+      try {
+        await job.updateProgress(10);
+        const result = await runContentGeneration(job.data);
+        await job.updateProgress(100);
+
+        const duration = Date.now() - startTime;
+        jobLogger.info(
+          {
+            generatedIds: result.generatedIds.length,
+            totalCost: result.totalCost,
+            errors: result.errors.length,
+            duration,
+          },
+          'Content generation job completed'
+        );
+
+        return result;
+      } catch (err) {
+        const duration = Date.now() - startTime;
+        jobLogger.error({ err, duration }, 'Content generation job failed');
+        throw err;
+      }
     },
     {
       connection,
       concurrency: 2,
+      limiter: {
+        max: 5,
+        duration: 60_000, // max 5 generation jobs per minute (API rate limiting)
+      },
     }
   );
 

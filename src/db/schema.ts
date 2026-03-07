@@ -9,6 +9,7 @@ import {
   boolean,
   primaryKey,
   index,
+  decimal,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import type { AdapterAccountType } from 'next-auth/adapters';
@@ -401,6 +402,64 @@ export type ContentIdea = typeof contentIdeas.$inferSelect;
 export type NewContentIdea = typeof contentIdeas.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// Generated Content
+// ─────────────────────────────────────────────────────────
+
+export const generatedContentTypeEnum = pgEnum('generated_content_type', [
+  'image',
+  'video',
+  'blog_article',
+  'social_copy',
+  'carousel',
+]);
+
+export type GeneratedContentType = (typeof generatedContentTypeEnum.enumValues)[number];
+
+export const generatedContentStatusEnum = pgEnum('generated_content_status', [
+  'pending',
+  'generating',
+  'completed',
+  'failed',
+  'approved',
+  'published',
+]);
+
+export type GeneratedContentStatus = (typeof generatedContentStatusEnum.enumValues)[number];
+
+export const generatedContent = pgTable(
+  'generated_content',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    contentIdeaId: uuid('content_idea_id')
+      .notNull()
+      .references(() => contentIdeas.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: generatedContentTypeEnum('type').notNull(),
+    status: generatedContentStatusEnum('status').notNull().default('pending'),
+    storageUrl: text('storage_url'),
+    thumbnailUrl: text('thumbnail_url'),
+    content: text('content'),
+    metadata: jsonb('metadata').default({}).notNull(),
+    aiToolUsed: text('ai_tool_used'),
+    generationCost: decimal('generation_cost', { precision: 10, scale: 6 }),
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_generated_content_idea_id').on(table.contentIdeaId),
+    index('idx_generated_content_user_id').on(table.userId),
+    index('idx_generated_content_status').on(table.status),
+    index('idx_generated_content_type').on(table.type),
+    index('idx_generated_content_user_status').on(table.userId, table.status),
+  ]
+);
+
+export type GeneratedContent = typeof generatedContent.$inferSelect;
+export type NewGeneratedContent = typeof generatedContent.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Relations
 // ─────────────────────────────────────────────────────────
 
@@ -409,6 +468,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   styleExamples: many(styleExamples),
   apiKeys: many(userApiKeys),
   contentIdeas: many(contentIdeas),
+  generatedContent: many(generatedContent),
 }));
 
 export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
@@ -440,8 +500,17 @@ export const scanJobsRelations = relations(scanJobs, ({ one }) => ({
   topic: one(topics, { fields: [scanJobs.topicId], references: [topics.id] }),
 }));
 
-export const contentIdeasRelations = relations(contentIdeas, ({ one }) => ({
+export const contentIdeasRelations = relations(contentIdeas, ({ one, many }) => ({
   topic: one(topics, { fields: [contentIdeas.topicId], references: [topics.id] }),
   trend: one(trends, { fields: [contentIdeas.trendId], references: [trends.id] }),
   user: one(users, { fields: [contentIdeas.userId], references: [users.id] }),
+  generatedContent: many(generatedContent),
+}));
+
+export const generatedContentRelations = relations(generatedContent, ({ one }) => ({
+  contentIdea: one(contentIdeas, {
+    fields: [generatedContent.contentIdeaId],
+    references: [contentIdeas.id],
+  }),
+  user: one(users, { fields: [generatedContent.userId], references: [users.id] }),
 }));

@@ -18,12 +18,33 @@ export interface ContentIdeasJobData {
   trendIds: string[];
 }
 
+export type ContentGenerationJobType =
+  | 'generate_image'
+  | 'generate_video'
+  | 'generate_text'
+  | 'generate_all';
+
 export interface ContentGenerationJobData {
   topicId: string;
   userId: string;
   contentIdeaId: string;
   platform: string;
   contentType: string;
+  jobType: ContentGenerationJobType;
+  imageOptions?: {
+    aspectRatio?: '1:1' | '9:16' | '16:9' | '4:5';
+    style?: string;
+    preferDalle?: boolean;
+  };
+  videoOptions?: {
+    duration?: 5 | 10;
+    aspectRatio?: '16:9' | '9:16' | '1:1';
+  };
+  textOptions?: {
+    seoKeywords?: string[];
+    wordCount?: number;
+  };
+  generatedContentId?: string;
 }
 
 // ─────────────────────────────────────────────────────────
