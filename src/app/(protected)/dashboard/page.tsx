@@ -68,32 +68,37 @@ export default async function DashboardPage() {
             .from(scanJobs)
             .where(and(inArray(scanJobs.topicId, topicIds), gte(scanJobs.startedAt, sevenDaysAgo)))
         : Promise.resolve([]),
-      db
-        .select({ status: contentIdeas.status, total: count() })
-        .from(contentIdeas)
-        .where(eq(contentIdeas.userId, userId))
-        .groupBy(contentIdeas.status),
-      db
-        .select({
-          id: contentIdeas.id,
-          title: contentIdeas.title,
-          platform: contentIdeas.platform,
-          contentType: contentIdeas.contentType,
-          status: contentIdeas.status,
-          priorityScore: contentIdeas.priorityScore,
-          scheduledFor: contentIdeas.scheduledFor,
-        })
-        .from(contentIdeas)
-        .where(
-          and(
-            eq(contentIdeas.userId, userId),
-            eq(contentIdeas.status, 'approved'),
-            isNotNull(contentIdeas.scheduledFor),
-            gte(contentIdeas.scheduledFor, todayStart)
-          )
-        )
-        .orderBy(desc(contentIdeas.priorityScore))
-        .limit(5),
+      topicIds.length > 0
+        ? db
+            .select({ status: contentIdeas.status, total: count() })
+            .from(contentIdeas)
+            .where(and(eq(contentIdeas.userId, userId), inArray(contentIdeas.topicId, topicIds)))
+            .groupBy(contentIdeas.status)
+        : Promise.resolve([]),
+      topicIds.length > 0
+        ? db
+            .select({
+              id: contentIdeas.id,
+              title: contentIdeas.title,
+              platform: contentIdeas.platform,
+              contentType: contentIdeas.contentType,
+              status: contentIdeas.status,
+              priorityScore: contentIdeas.priorityScore,
+              scheduledFor: contentIdeas.scheduledFor,
+            })
+            .from(contentIdeas)
+            .where(
+              and(
+                eq(contentIdeas.userId, userId),
+                inArray(contentIdeas.topicId, topicIds),
+                eq(contentIdeas.status, 'approved'),
+                isNotNull(contentIdeas.scheduledFor),
+                gte(contentIdeas.scheduledFor, todayStart)
+              )
+            )
+            .orderBy(desc(contentIdeas.priorityScore))
+            .limit(5)
+        : Promise.resolve([]),
     ]);
 
     const statsByStatus = Object.fromEntries(ideaStats.map((r) => [r.status, r.total]));

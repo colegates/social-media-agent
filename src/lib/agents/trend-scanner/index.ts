@@ -51,7 +51,7 @@ export async function runTrendScan(
       throw new Error(`Topic ${topicId} not found for user ${userId}`);
     }
 
-    // Log which sources are available
+    // Log which sources are available (API key perspective)
     const sourcesConfigured: string[] = [];
     const sourcesMissing: string[] = [];
 
@@ -72,15 +72,35 @@ export async function runTrendScan(
       'Starting trend scan'
     );
 
+    // Resolve platform filter AFTER sourcesConfigured/sourcesMissing is known
+
     // Extract sources by type
     const subreddits = topic.sources.filter((s) => s.type === 'subreddit').map((s) => s.value);
     const hashtags = topic.sources.filter((s) => s.type === 'hashtag').map((s) => s.value);
     const searchTerms = topic.sources.filter((s) => s.type === 'search_term').map((s) => s.value);
+    const platformSources = topic.sources.filter((s) => s.type === 'platform').map((s) => s.value);
 
     const allKeywords = [...topic.keywords, ...searchTerms].filter(Boolean);
     const allHashtags = [...hashtags, ...topic.keywords.map((k) => `#${k}`)].filter(Boolean);
 
-    // Fetch from all sources concurrently
+    // Determine which platforms to query.
+    // Explicit `platform` sources restrict scanning to only those platforms.
+    // With no platform sources, all available platforms are scanned (default behaviour).
+    const hasPlatformFilter = platformSources.length > 0;
+    const enabledPlatforms = new Set<string>(
+      hasPlatformFilter
+        ? platformSources
+        : ['google', 'youtube', 'twitter', 'tiktok', 'instagram', 'reddit']
+    );
+
+    jobLogger.info(
+      { hasPlatformFilter, enabledPlatforms: [...enabledPlatforms] },
+      'Platform filter resolved'
+    );
+
+    const skip = Promise.resolve<RawTrendItem[]>([]);
+
+    // Fetch from all selected sources concurrently
     const [
       googleResults,
       googleNewsResults,
@@ -90,16 +110,34 @@ export async function runTrendScan(
       instagramResults,
       ...redditResults
     ] = await Promise.allSettled([
-      searchGoogle(allKeywords, userKeys.serpapi ?? null, 10),
-      searchGoogleNews(allKeywords, userKeys.serpapi ?? null, 10),
-      searchYouTube(allKeywords, userKeys.serpapi ?? null, 10),
-      searchTweets(allKeywords, userKeys.twitter ?? null, 20),
-      scrapeTikTok(allKeywords, userKeys.apify ?? null, 20),
-      scrapeInstagram(allHashtags, userKeys.apify ?? null, 20),
-      searchReddit(allKeywords, subreddits, 10, redditCredentials),
+      enabledPlatforms.has('google')
+        ? searchGoogle(allKeywords, userKeys.serpapi ?? null, 10)
+        : skip,
+      enabledPlatforms.has('google')
+        ? searchGoogleNews(allKeywords, userKeys.serpapi ?? null, 10)
+        : skip,
+      enabledPlatforms.has('youtube')
+        ? searchYouTube(allKeywords, userKeys.serpapi ?? null, 10)
+        : skip,
+      enabledPlatforms.has('twitter')
+        ? searchTweets(allKeywords, userKeys.twitter ?? null, 20)
+        : skip,
+      enabledPlatforms.has('tiktok')
+        ? scrapeTikTok(allKeywords, userKeys.apify ?? null, 20)
+        : skip,
+      enabledPlatforms.has('instagram')
+        ? scrapeInstagram(allHashtags, userKeys.apify ?? null, 20)
+        : skip,
+      enabledPlatforms.has('reddit')
+        ? searchReddit(allKeywords, subreddits, 10, redditCredentials)
+        : skip,
       ...subreddits
         .slice(0, 5)
-        .map((sub) => fetchSubredditPosts(sub, 'hot', 10, redditCredentials)),
+        .map((sub) =>
+          enabledPlatforms.has('reddit')
+            ? fetchSubredditPosts(sub, 'hot', 10, redditCredentials)
+            : skip
+        ),
     ]);
 
     const allItems: RawTrendItem[] = [];

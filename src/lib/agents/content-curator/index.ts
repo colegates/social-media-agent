@@ -5,6 +5,7 @@ import { eq, and, inArray, desc, gte } from 'drizzle-orm';
 import { getUserApiKeys } from '@/lib/services/api-keys';
 import { generateIdeasForTrend } from './generator';
 import { scoreAndPrioritiseIdeas } from './prioritiser';
+import { getUserIdeaFeedback, buildFeedbackContext } from '@/lib/services/idea-feedback';
 import type { CurationResult, StyleProfileInput } from './types';
 
 const curatorLogger = logger.child({ module: 'content-curator' });
@@ -27,8 +28,8 @@ export async function runContentCuration(
 
   jobLogger.info('Content curation started');
 
-  // Load topic, user style profile, and API keys in parallel
-  const [topic, user, userKeys] = await Promise.all([
+  // Load topic, user style profile, API keys, and idea feedback in parallel
+  const [topic, user, userKeys, ideaFeedback] = await Promise.all([
     db.query.topics.findFirst({
       where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
     }),
@@ -37,6 +38,7 @@ export async function runContentCuration(
       columns: { styleProfile: true },
     }),
     getUserApiKeys(userId, ['anthropic']),
+    getUserIdeaFeedback(userId),
   ]);
 
   if (!topic) {
@@ -51,6 +53,9 @@ export async function runContentCuration(
 
   // Extract style profile from user record
   const styleProfile: StyleProfileInput = buildStyleProfile(user?.styleProfile);
+
+  // Build feedback context string for Claude (null if user has no feedback history yet)
+  const feedbackContext = buildFeedbackContext(ideaFeedback);
 
   // Load the top trends from the provided IDs (sorted by virality, capped)
   const trendData =
@@ -85,12 +90,28 @@ export async function runContentCuration(
 
   jobLogger.info({ eligibleTrends: eligibleTrends.length }, 'Generating ideas for top trends');
 
-  // Auto-approve threshold from topic settings
+  // Load existing idea titles for this topic to deduplicate before inserting
+  const existingIdeaTitles = await db
+    .select({ title: contentIdeas.title, platform: contentIdeas.platform })
+    .from(contentIdeas)
+    .where(eq(contentIdeas.topicId, topicId));
+
+  const existingIdeaKeys = new Set<string>(
+    existingIdeaTitles.map((i) =>
+      `${i.platform}::${i.title.toLowerCase().replace(/\s+/g, ' ').trim()}`
+    )
+  );
+
+  jobLogger.debug({ existingIdeasCount: existingIdeaTitles.length }, 'Loaded existing idea keys for deduplication');
+
+  // Settings from topic
   const topicSettings = (topic.settings ?? {}) as Record<string, unknown>;
   const autoApproveThreshold =
     typeof topicSettings.autoApproveThreshold === 'number'
       ? topicSettings.autoApproveThreshold
       : null;
+  const maxIdeasPerRun =
+    typeof topicSettings.maxIdeasPerRun === 'number' ? topicSettings.maxIdeasPerRun : null;
 
   let ideasGenerated = 0;
   let ideasSaved = 0;
@@ -98,6 +119,12 @@ export async function runContentCuration(
 
   // Process trends sequentially to avoid hammering Claude
   for (const trend of eligibleTrends) {
+    // Respect per-run cap
+    if (maxIdeasPerRun !== null && ideasSaved >= maxIdeasPerRun) {
+      jobLogger.info({ maxIdeasPerRun, ideasSaved }, 'Max ideas per run reached, stopping early');
+      break;
+    }
+
     try {
       jobLogger.debug({ trendId: trend.id, trendTitle: trend.title }, 'Generating ideas for trend');
 
@@ -106,7 +133,8 @@ export async function runContentCuration(
         topic.name,
         topic.description ?? null,
         styleProfile,
-        anthropicKey
+        anthropicKey,
+        feedbackContext
       );
 
       ideasGenerated += rawIdeas.length;
@@ -125,14 +153,35 @@ export async function runContentCuration(
         anthropicKey
       );
 
+      // Deduplicate: skip ideas whose platform+title already exist for this topic
+      const novelIdeas = scoredIdeas.filter((idea) => {
+        const key = `${idea.platform}::${idea.title.toLowerCase().replace(/\s+/g, ' ').trim()}`;
+        if (existingIdeaKeys.has(key)) return false;
+        // Add to the set immediately so duplicates within this run are also caught
+        existingIdeaKeys.add(key);
+        return true;
+      });
+
+      if (novelIdeas.length < scoredIdeas.length) {
+        jobLogger.debug(
+          { skipped: scoredIdeas.length - novelIdeas.length, trendId: trend.id },
+          'Skipped duplicate content ideas'
+        );
+      }
+
       // Persist to database
-      if (scoredIdeas.length > 0) {
+      if (novelIdeas.length > 0) {
         const now = new Date();
+
+        // Clamp to the remaining budget if maxIdeasPerRun is set
+        const budget =
+          maxIdeasPerRun !== null ? maxIdeasPerRun - ideasSaved : novelIdeas.length;
+        const ideasToInsert = novelIdeas.slice(0, budget);
 
         const inserted = await db
           .insert(contentIdeas)
           .values(
-            scoredIdeas.map((idea) => ({
+            ideasToInsert.map((idea) => ({
               topicId,
               trendId: trend.id,
               userId,
