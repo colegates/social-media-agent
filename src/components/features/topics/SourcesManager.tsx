@@ -8,6 +8,7 @@ import {
   Search,
   Users,
   MessageSquare,
+  Layers,
   Plus,
   X,
   Trash2,
@@ -37,6 +38,7 @@ const SOURCE_CONFIG: Record<
   hashtag: { label: 'Hashtag', icon: Hash, placeholder: '#trending or trending' },
   search_term: { label: 'Search Term', icon: Search, placeholder: 'viral skincare routine' },
   competitor_account: { label: 'Competitor', icon: Users, placeholder: '@competitor or handle' },
+  platform: { label: 'Platform', icon: Layers, placeholder: 'instagram, tiktok, youtube, reddit…' },
 };
 
 interface SourcesManagerProps {
