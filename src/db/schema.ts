@@ -9,6 +9,7 @@ import {
   boolean,
   primaryKey,
   index,
+  uniqueIndex,
   decimal,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -238,7 +239,7 @@ export const userApiKeys = pgTable(
   },
   (table) => [
     index('idx_user_api_keys_user_id').on(table.userId),
-    index('idx_user_api_keys_user_service').on(table.userId, table.service),
+    uniqueIndex('idx_user_api_keys_user_service').on(table.userId, table.service),
   ]
 );
 

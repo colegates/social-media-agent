@@ -57,6 +57,13 @@
       "when": 1772896134604,
       "tag": "0007_freezing_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1741478400000,
+      "tag": "0008_unique_user_api_keys",
+      "breakpoints": true
     }
   ]
 }
