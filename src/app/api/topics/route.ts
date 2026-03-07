@@ -51,7 +51,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return apiError('VALIDATION_ERROR', 'Validation failed', parsed.error.flatten());
     }
 
-    const { name, description, keywords, scanFrequencyMinutes, isActive } = parsed.data;
+    const {
+      name,
+      description,
+      keywords,
+      scanFrequencyMinutes,
+      contentGenerationFrequencyMinutes,
+      trendDeduplicationWindowHours,
+      isActive,
+    } = parsed.data;
 
     const [newTopic] = await db
       .insert(topics)
@@ -61,6 +69,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         description: description ?? null,
         keywords,
         scanFrequencyMinutes,
+        contentGenerationFrequencyMinutes: contentGenerationFrequencyMinutes ?? null,
+        trendDeduplicationWindowHours: trendDeduplicationWindowHours ?? 24,
         isActive: isActive ?? true,
       })
       .returning();

@@ -15,11 +15,12 @@ import { getRedisConnectionOptions, closeRedisConnection } from './lib/queue/con
 import { QUEUE_NAMES, getContentIdeasQueue } from './lib/queue/queues';
 import { initScheduler } from './lib/queue/scheduler';
 import { runTrendScan } from './lib/agents/trend-scanner';
-import { runContentCuration } from './lib/agents/content-curator';
+import { runContentCuration, runScheduledContentCuration } from './lib/agents/content-curator';
 import { runContentGeneration } from './lib/agents/content-generator';
 import type {
   TrendScanJobData,
   ContentIdeasJobData,
+  ScheduledContentJobData,
   ContentGenerationJobData,
 } from './lib/queue/queues';
 
@@ -31,7 +32,7 @@ const workerLogger = logger.child({ module: 'worker' });
 // ─────────────────────────────────────────────────────────
 
 let trendScanWorker: Worker<TrendScanJobData>;
-let contentIdeasWorker: Worker<ContentIdeasJobData>;
+let contentIdeasWorker: Worker<ContentIdeasJobData | ScheduledContentJobData>;
 let contentGenerationWorker: Worker<ContentGenerationJobData>;
 
 // ─────────────────────────────────────────────────────────
@@ -104,24 +105,28 @@ async function start(): Promise<void> {
   // Content Ideas Worker (Stage 5 placeholder)
   // ─────────────────────────────────────────────────────
 
-  contentIdeasWorker = new Worker<ContentIdeasJobData>(
+  contentIdeasWorker = new Worker<ContentIdeasJobData | ScheduledContentJobData>(
     QUEUE_NAMES.CONTENT_IDEAS,
     async (job) => {
+      const isScheduled = 'isScheduled' in job.data && job.data.isScheduled;
       const jobLogger = workerLogger.child({
         jobId: job.id,
         topicId: job.data.topicId,
-        trendCount: job.data.trendIds.length,
+        isScheduled,
+        trendCount: isScheduled ? 'n/a (scheduled)' : (job.data as ContentIdeasJobData).trendIds.length,
       });
 
       const startTime = Date.now();
       jobLogger.info('Content ideas job started');
 
       try {
-        const result = await runContentCuration(
-          job.data.topicId,
-          job.data.userId,
-          job.data.trendIds
-        );
+        const result = isScheduled
+          ? await runScheduledContentCuration(job.data.topicId, job.data.userId)
+          : await runContentCuration(
+              job.data.topicId,
+              job.data.userId,
+              (job.data as ContentIdeasJobData).trendIds
+            );
 
         const duration = Date.now() - startTime;
         jobLogger.info(

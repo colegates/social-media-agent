@@ -64,6 +64,13 @@
       "when": 1741478400000,
       "tag": "0008_unique_user_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1741564800000,
+      "tag": "0009_granular_scheduling",
+      "breakpoints": true
     }
   ]
 }

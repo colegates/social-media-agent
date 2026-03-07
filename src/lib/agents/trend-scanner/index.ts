@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 import { db } from '@/db';
 import { topics, trends, scanJobs } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte } from 'drizzle-orm';
 import { getUserApiKeys } from '@/lib/services/api-keys';
 import { searchGoogle, searchGoogleNews, searchYouTube } from './sources/serpapi';
 import { scrapeTikTok, scrapeInstagram } from './sources/apify';
@@ -139,16 +139,48 @@ export async function runTrendScan(
       return { trendsFound: 0, trendIds: [], sourcesConfigured, sourcesMissing };
     }
 
-    // Deduplicate
+    // In-memory deduplication within the current batch
     const seen = new Set<string>();
-    const deduplicated = allItems.filter((item) => {
+    const batchDeduplicated = allItems.filter((item) => {
       const key = (item.sourceUrl ?? item.title).toLowerCase().replace(/\s+/g, ' ').trim();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    jobLogger.info({ deduplicated: deduplicated.length }, 'Deduplicated trend items');
+    jobLogger.info(
+      { batchDeduplicated: batchDeduplicated.length },
+      'In-memory batch deduplication complete'
+    );
+
+    // DB deduplication: filter out trends already seen within the deduplication window
+    const deduplicationWindowHours = topic.trendDeduplicationWindowHours ?? 24;
+    const windowStart = new Date(Date.now() - deduplicationWindowHours * 60 * 60 * 1000);
+
+    const recentTrends = await db
+      .select({ title: trends.title, sourceUrl: trends.sourceUrl })
+      .from(trends)
+      .where(and(eq(trends.topicId, topicId), gte(trends.discoveredAt, windowStart)));
+
+    const recentKeys = new Set<string>(
+      recentTrends.map((t) =>
+        (t.sourceUrl ?? t.title).toLowerCase().replace(/\s+/g, ' ').trim()
+      )
+    );
+
+    const deduplicated = batchDeduplicated.filter((item) => {
+      const key = (item.sourceUrl ?? item.title).toLowerCase().replace(/\s+/g, ' ').trim();
+      return !recentKeys.has(key);
+    });
+
+    jobLogger.info(
+      {
+        beforeDbDedup: batchDeduplicated.length,
+        deduplicated: deduplicated.length,
+        windowHours: deduplicationWindowHours,
+      },
+      'DB deduplication complete'
+    );
 
     // Score (uses Anthropic if key available, otherwise falls back to heuristics)
     const scored = await scoreTrends(

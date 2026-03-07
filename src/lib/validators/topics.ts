@@ -11,6 +11,27 @@ export const SCAN_FREQUENCY_OPTIONS = [
   { value: 1440, label: '24 hours' },
 ] as const;
 
+export const CONTENT_GENERATION_FREQUENCY_OPTIONS = [
+  { value: null, label: 'Disabled (manual only)' },
+  { value: 60, label: '1 hour' },
+  { value: 120, label: '2 hours' },
+  { value: 240, label: '4 hours' },
+  { value: 480, label: '8 hours' },
+  { value: 720, label: '12 hours' },
+  { value: 1440, label: '24 hours (once per day)' },
+  { value: 2880, label: '48 hours (every 2 days)' },
+  { value: 10080, label: '7 days (weekly)' },
+] as const;
+
+export const DEDUPLICATION_WINDOW_OPTIONS = [
+  { value: 1, label: '1 hour' },
+  { value: 6, label: '6 hours' },
+  { value: 12, label: '12 hours' },
+  { value: 24, label: '24 hours' },
+  { value: 48, label: '48 hours' },
+  { value: 168, label: '7 days' },
+] as const;
+
 export const SOURCE_TYPES = [
   'website',
   'social_link',
@@ -40,6 +61,20 @@ export const createTopicSchema = z.object({
     .int()
     .min(15, 'Minimum scan frequency is 15 minutes')
     .max(1440, 'Maximum scan frequency is 24 hours'),
+  contentGenerationFrequencyMinutes: z
+    .number()
+    .int()
+    .min(60, 'Minimum content generation frequency is 60 minutes')
+    .max(10080, 'Maximum content generation frequency is 7 days')
+    .nullable()
+    .optional(),
+  trendDeduplicationWindowHours: z
+    .number()
+    .int()
+    .min(1, 'Minimum deduplication window is 1 hour')
+    .max(168, 'Maximum deduplication window is 7 days')
+    .optional()
+    .default(24),
   isActive: z.boolean().optional().default(true),
   settings: topicSettingsSchema.optional(),
 });
