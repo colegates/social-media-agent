@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { LoginForm } from '@/components/forms/LoginForm';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export const metadata: Metadata = {
@@ -30,15 +29,6 @@ export default function LoginPage() {
         <Suspense fallback={<LoginFormFallback />}>
           <LoginForm />
         </Suspense>
-        <p className="text-muted-foreground mt-4 text-center text-sm">
-          Don&apos;t have an account?{' '}
-          <Link
-            href="/register"
-            className="text-primary underline underline-offset-4 hover:opacity-80"
-          >
-            Create one
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );
