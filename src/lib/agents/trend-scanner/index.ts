@@ -1,7 +1,8 @@
 import { logger } from '@/lib/logger';
 import { db } from '@/db';
-import { topics, topicSources, trends, scanJobs } from '@/db/schema';
+import { topics, trends, scanJobs } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { getUserApiKeys } from '@/lib/services/api-keys';
 import { searchGoogle, searchGoogleNews, searchYouTube } from './sources/serpapi';
 import { scrapeTikTok, scrapeInstagram } from './sources/apify';
 import { fetchSubredditPosts, searchReddit } from './sources/reddit';
@@ -11,17 +12,20 @@ import type { RawTrendItem } from './types';
 
 const scanLogger = logger.child({ module: 'trend-scanner' });
 
-const MIN_VIRALITY_SCORE = 10; // Filter out very low-quality results
+const MIN_VIRALITY_SCORE = 10;
 const MAX_TRENDS_PER_SCAN = 50;
 
-interface ScanResult {
+export interface ScanResult {
   trendsFound: number;
   trendIds: string[];
+  sourcesConfigured: string[];
+  sourcesMissing: string[];
 }
 
 /**
  * Run a full trend scan for a topic.
- * Fetches from all configured sources, scores results, and stores in DB.
+ * Looks up the user's API keys from the DB, then queries all configured sources.
+ * Sources with no key configured are skipped gracefully.
  */
 export async function runTrendScan(
   topicId: string,
@@ -31,49 +35,51 @@ export async function runTrendScan(
   const jobLogger = scanLogger.child({ topicId, userId, scanJobId });
   const start = Date.now();
 
-  // Mark scan job as running
-  await db
-    .update(scanJobs)
-    .set({ status: 'running' })
-    .where(eq(scanJobs.id, scanJobId));
+  await db.update(scanJobs).set({ status: 'running' }).where(eq(scanJobs.id, scanJobId));
 
   try {
-    // Fetch topic with sources
-    const topic = await db.query.topics.findFirst({
-      where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
-      with: { sources: true },
-    });
+    // Load topic and user API keys in parallel
+    const [topic, userKeys] = await Promise.all([
+      db.query.topics.findFirst({
+        where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
+        with: { sources: true },
+      }),
+      getUserApiKeys(userId, ['anthropic', 'serpapi', 'apify', 'twitter']),
+    ]);
 
     if (!topic) {
       throw new Error(`Topic ${topicId} not found for user ${userId}`);
     }
 
-    jobLogger.info({ topicName: topic.name, keywords: topic.keywords }, 'Starting trend scan');
+    // Log which sources are available
+    const sourcesConfigured: string[] = [];
+    const sourcesMissing: string[] = [];
+
+    if (userKeys.serpapi) sourcesConfigured.push('google', 'youtube');
+    else sourcesMissing.push('google', 'youtube');
+
+    if (userKeys.apify) sourcesConfigured.push('tiktok', 'instagram');
+    else sourcesMissing.push('tiktok', 'instagram');
+
+    if (userKeys.twitter) sourcesConfigured.push('twitter');
+    else sourcesMissing.push('twitter');
+
+    sourcesConfigured.push('reddit'); // always available, no key needed
+
+    jobLogger.info(
+      { topicName: topic.name, sourcesConfigured, sourcesMissing },
+      'Starting trend scan'
+    );
 
     // Extract sources by type
-    const subreddits = topic.sources
-      .filter((s) => s.type === 'subreddit')
-      .map((s) => s.value);
-    const hashtags = topic.sources
-      .filter((s) => s.type === 'hashtag')
-      .map((s) => s.value);
-    const searchTerms = topic.sources
-      .filter((s) => s.type === 'search_term')
-      .map((s) => s.value);
+    const subreddits = topic.sources.filter((s) => s.type === 'subreddit').map((s) => s.value);
+    const hashtags = topic.sources.filter((s) => s.type === 'hashtag').map((s) => s.value);
+    const searchTerms = topic.sources.filter((s) => s.type === 'search_term').map((s) => s.value);
 
-    const allKeywords = [
-      ...topic.keywords,
-      ...searchTerms,
-    ].filter(Boolean);
+    const allKeywords = [...topic.keywords, ...searchTerms].filter(Boolean);
+    const allHashtags = [...hashtags, ...topic.keywords.map((k) => `#${k}`)].filter(Boolean);
 
-    const allHashtags = [
-      ...hashtags,
-      ...topic.keywords.map((k) => `#${k}`),
-    ].filter(Boolean);
-
-    // Fetch from all sources concurrently, with graceful degradation
-    jobLogger.info('Fetching from all sources concurrently');
-
+    // Fetch from all sources concurrently
     const [
       googleResults,
       googleNewsResults,
@@ -83,20 +89,16 @@ export async function runTrendScan(
       instagramResults,
       ...redditResults
     ] = await Promise.allSettled([
-      // Web/Google sources
-      searchGoogle(allKeywords, 10),
-      searchGoogleNews(allKeywords, 10),
-      searchYouTube(allKeywords, 10),
-      // Social sources
-      searchTweets(allKeywords, 20),
-      scrapeTikTok(allKeywords, 20),
-      scrapeInstagram(allHashtags, 20),
-      // Reddit: search + individual subreddits
+      searchGoogle(allKeywords, userKeys.serpapi ?? null, 10),
+      searchGoogleNews(allKeywords, userKeys.serpapi ?? null, 10),
+      searchYouTube(allKeywords, userKeys.serpapi ?? null, 10),
+      searchTweets(allKeywords, userKeys.twitter ?? null, 20),
+      scrapeTikTok(allKeywords, userKeys.apify ?? null, 20),
+      scrapeInstagram(allHashtags, userKeys.apify ?? null, 20),
       searchReddit(allKeywords, subreddits, 10),
       ...subreddits.slice(0, 5).map((sub) => fetchSubredditPosts(sub, 'hot', 10)),
     ]);
 
-    // Aggregate all results, ignoring failures
     const allItems: RawTrendItem[] = [];
 
     function addSettled(result: PromiseSettledResult<RawTrendItem[]>, source: string): void {
@@ -124,12 +126,17 @@ export async function runTrendScan(
       jobLogger.warn('No trend items found from any source');
       await db
         .update(scanJobs)
-        .set({ status: 'completed', trendsFound: 0, completedAt: new Date() })
+        .set({
+          status: 'completed',
+          trendsFound: 0,
+          completedAt: new Date(),
+          metadata: { sourcesConfigured, sourcesMissing },
+        })
         .where(eq(scanJobs.id, scanJobId));
-      return { trendsFound: 0, trendIds: [] };
+      return { trendsFound: 0, trendIds: [], sourcesConfigured, sourcesMissing };
     }
 
-    // Deduplicate by title similarity (simple URL/title dedup)
+    // Deduplicate
     const seen = new Set<string>();
     const deduplicated = allItems.filter((item) => {
       const key = (item.sourceUrl ?? item.title).toLowerCase().replace(/\s+/g, ' ').trim();
@@ -140,22 +147,21 @@ export async function runTrendScan(
 
     jobLogger.info({ deduplicated: deduplicated.length }, 'Deduplicated trend items');
 
-    // Score all items
+    // Score (uses Anthropic if key available, otherwise falls back to heuristics)
     const scored = await scoreTrends(
       deduplicated,
       topic.name,
       topic.description ?? null,
-      allKeywords
+      allKeywords,
+      userKeys.anthropic ?? null
     );
 
-    // Filter and limit
     const topTrends = scored
       .filter((t) => t.compositeScore >= MIN_VIRALITY_SCORE)
       .slice(0, MAX_TRENDS_PER_SCAN);
 
     jobLogger.info({ topTrendsCount: topTrends.length }, 'Top trends selected');
 
-    // Store in database
     const trendIds: string[] = [];
     if (topTrends.length > 0) {
       const inserted = await db
@@ -185,23 +191,24 @@ export async function runTrendScan(
 
     const duration = Date.now() - start;
 
-    // Mark scan job as completed
     await db
       .update(scanJobs)
       .set({
         status: 'completed',
         trendsFound: trendIds.length,
         completedAt: new Date(),
-        metadata: { duration, sources: { total: allItems.length, deduplicated: deduplicated.length } },
+        metadata: {
+          duration,
+          sources: { total: allItems.length, deduplicated: deduplicated.length },
+          sourcesConfigured,
+          sourcesMissing,
+        },
       })
       .where(eq(scanJobs.id, scanJobId));
 
-    jobLogger.info(
-      { trendsFound: trendIds.length, duration },
-      'Trend scan completed successfully'
-    );
+    jobLogger.info({ trendsFound: trendIds.length, duration }, 'Trend scan completed successfully');
 
-    return { trendsFound: trendIds.length, trendIds };
+    return { trendsFound: trendIds.length, trendIds, sourcesConfigured, sourcesMissing };
   } catch (err) {
     const duration = Date.now() - start;
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -210,11 +217,7 @@ export async function runTrendScan(
 
     await db
       .update(scanJobs)
-      .set({
-        status: 'failed',
-        completedAt: new Date(),
-        errorLog: errorMessage,
-      })
+      .set({ status: 'failed', completedAt: new Date(), errorLog: errorMessage })
       .where(eq(scanJobs.id, scanJobId));
 
     throw err;

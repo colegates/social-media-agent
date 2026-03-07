@@ -58,6 +58,20 @@ export default async function SettingsPage() {
           </Card>
         </Link>
 
+        {/* API Keys - active link */}
+        <Link href="/settings/api-keys">
+          <Card className="hover:bg-accent/50 cursor-pointer transition-colors">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Key className="h-4 w-4" />
+                API Keys
+                <ChevronRight className="text-muted-foreground ml-auto h-4 w-4" />
+              </CardTitle>
+              <CardDescription>Connect Anthropic, SerpAPI, Apify, Twitter, and more</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
         {/* Coming soon sections */}
         {[
           {
@@ -65,7 +79,6 @@ export default async function SettingsPage() {
             title: 'Notifications',
             description: 'Manage push notification preferences',
           },
-          { icon: Key, title: 'API Keys', description: 'Connect third-party services' },
         ].map((section) => {
           const Icon = section.icon;
           return (

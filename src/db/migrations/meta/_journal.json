@@ -29,6 +29,13 @@
       "when": 1772888612013,
       "tag": "0003_bent_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772889757395,
+      "tag": "0004_shocking_blade",
+      "breakpoints": true
     }
   ]
 }

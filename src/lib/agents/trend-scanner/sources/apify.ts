@@ -8,20 +8,17 @@ const sourceLogger = logger.child({ module: 'trend-scanner', source: 'apify' });
 const ACTOR_TIMEOUT_MS = 120_000; // 2 minutes for actor runs
 const MAX_RETRIES = 2;
 
-function getClient(): ApifyClient {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new ExternalApiError('auth_error', 'APIFY_API_TOKEN not set', 'apify');
-  }
+function getClient(token: string): ApifyClient {
   return new ApifyClient({ token });
 }
 
 async function runActorWithRetry<T>(
   actorId: string,
   input: Record<string, unknown>,
+  token: string,
   attempt = 0
 ): Promise<T[]> {
-  const client = getClient();
+  const client = getClient(token);
   const start = Date.now();
 
   try {
@@ -53,7 +50,7 @@ async function runActorWithRetry<T>(
       const delay = Math.pow(2, attempt) * 2000;
       sourceLogger.warn({ attempt, delay, actorId, err }, 'Apify actor run failed, retrying');
       await new Promise((r) => setTimeout(r, delay));
-      return runActorWithRetry<T>(actorId, input, attempt + 1);
+      return runActorWithRetry<T>(actorId, input, token, attempt + 1);
     }
 
     throw new ExternalApiError(
@@ -75,17 +72,19 @@ interface TikTokItem {
   createTime?: number;
 }
 
-export async function scrapeTikTok(keywords: string[], maxResults = 20): Promise<RawTrendItem[]> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    sourceLogger.warn('APIFY_API_TOKEN not set, skipping TikTok scraping');
+export async function scrapeTikTok(
+  keywords: string[],
+  apifyToken: string | null,
+  maxResults = 20
+): Promise<RawTrendItem[]> {
+  if (!apifyToken) {
+    sourceLogger.warn('Apify token not configured, skipping TikTok scraping');
     return [];
   }
 
   sourceLogger.info({ keywords: keywords.slice(0, 3), maxResults }, 'Scraping TikTok via Apify');
 
   try {
-    // Using Apify's TikTok scraper actor
     const items = await runActorWithRetry<TikTokItem>(
       'clockworks/free-tiktok-scraper',
       {
@@ -93,7 +92,8 @@ export async function scrapeTikTok(keywords: string[], maxResults = 20): Promise
         resultsPerQuery: Math.ceil(maxResults / keywords.length),
         shouldDownloadVideos: false,
         shouldDownloadCovers: false,
-      }
+      },
+      apifyToken
     );
 
     const results: RawTrendItem[] = items
@@ -132,11 +132,11 @@ interface InstagramItem {
 
 export async function scrapeInstagram(
   hashtags: string[],
+  apifyToken: string | null,
   maxResults = 20
 ): Promise<RawTrendItem[]> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    sourceLogger.warn('APIFY_API_TOKEN not set, skipping Instagram scraping');
+  if (!apifyToken) {
+    sourceLogger.warn('Apify token not configured, skipping Instagram scraping');
     return [];
   }
 
@@ -149,7 +149,8 @@ export async function scrapeInstagram(
         hashtags: hashtags.slice(0, 5).map((h) => h.replace(/^#/, '')),
         resultsLimit: maxResults,
         proxy: { useApifyProxy: true },
-      }
+      },
+      apifyToken
     );
 
     const results: RawTrendItem[] = items

@@ -205,6 +205,44 @@ export type StyleExample = typeof styleExamples.$inferSelect;
 export type NewStyleExample = typeof styleExamples.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
+// User API Keys (encrypted per-user credentials for 3rd party services)
+// ─────────────────────────────────────────────────────────
+
+export const apiKeyServiceEnum = pgEnum('api_key_service', [
+  'anthropic',
+  'serpapi',
+  'apify',
+  'twitter',
+  'replicate',
+  'kling',
+  'runway',
+]);
+
+export type ApiKeyService = (typeof apiKeyServiceEnum.enumValues)[number];
+
+export const userApiKeys = pgTable(
+  'user_api_keys',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    service: apiKeyServiceEnum('service').notNull(),
+    encryptedKey: text('encrypted_key').notNull(),
+    keyHint: text('key_hint'), // last 4 chars of original key, shown in UI
+    createdAt: timestamp('created_at', { mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_user_api_keys_user_id').on(table.userId),
+    index('idx_user_api_keys_user_service').on(table.userId, table.service),
+  ]
+);
+
+export type UserApiKey = typeof userApiKeys.$inferSelect;
+export type NewUserApiKey = typeof userApiKeys.$inferInsert;
+
+// ─────────────────────────────────────────────────────────
 // Trends
 // ─────────────────────────────────────────────────────────
 
@@ -292,6 +330,11 @@ export type NewScanJob = typeof scanJobs.$inferInsert;
 export const usersRelations = relations(users, ({ many }) => ({
   topics: many(topics),
   styleExamples: many(styleExamples),
+  apiKeys: many(userApiKeys),
+}));
+
+export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
+  user: one(users, { fields: [userApiKeys.userId], references: [users.id] }),
 }));
 
 export const topicsRelations = relations(topics, ({ one, many }) => ({

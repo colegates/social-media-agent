@@ -32,42 +32,8 @@ services:
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
 
-      # Anthropic (Claude API + Agent SDK)
-      - key: ANTHROPIC_API_KEY
-        sync: false
-
-      # Image Generation (Replicate / Flux)
-      - key: REPLICATE_API_TOKEN
-        sync: false
-
-      # Video Generation (Kling)
-      - key: KLING_API_KEY
-        sync: false
-
-      # Video Generation (Runway) - secondary
-      - key: RUNWAY_API_KEY
-        sync: false
-
-      # Web Search (SerpAPI)
-      - key: SERPAPI_API_KEY
-        sync: false
-
-      # Social Scraping (Apify)
-      - key: APIFY_API_TOKEN
-        sync: false
-
-      # Twitter/X API
-      - key: TWITTER_API_KEY
-        sync: false
-      - key: TWITTER_API_SECRET
-        sync: false
-      - key: TWITTER_BEARER_TOKEN
-        sync: false
-
-      # Reddit API
-      - key: REDDIT_CLIENT_ID
-        sync: false
-      - key: REDDIT_CLIENT_SECRET
+      # Encryption key for user API keys stored in DB (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+      - key: ENCRYPTION_KEY
         sync: false
 
       # Cloudflare R2 Storage
@@ -108,42 +74,8 @@ services:
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
 
-      # Anthropic (Claude API + Agent SDK)
-      - key: ANTHROPIC_API_KEY
-        sync: false
-
-      # Image Generation (Replicate / Flux)
-      - key: REPLICATE_API_TOKEN
-        sync: false
-
-      # Video Generation (Kling)
-      - key: KLING_API_KEY
-        sync: false
-
-      # Video Generation (Runway)
-      - key: RUNWAY_API_KEY
-        sync: false
-
-      # Web Search (SerpAPI)
-      - key: SERPAPI_API_KEY
-        sync: false
-
-      # Social Scraping (Apify)
-      - key: APIFY_API_TOKEN
-        sync: false
-
-      # Twitter/X API
-      - key: TWITTER_API_KEY
-        sync: false
-      - key: TWITTER_API_SECRET
-        sync: false
-      - key: TWITTER_BEARER_TOKEN
-        sync: false
-
-      # Reddit API
-      - key: REDDIT_CLIENT_ID
-        sync: false
-      - key: REDDIT_CLIENT_SECRET
+      # Encryption key for user API keys stored in DB
+      - key: ENCRYPTION_KEY
         sync: false
 
       # Cloudflare R2 Storage

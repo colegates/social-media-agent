@@ -33,13 +33,9 @@ interface TwitterSearchResponse {
 async function twitterFetch(
   endpoint: string,
   params: Record<string, string>,
+  bearerToken: string,
   attempt = 0
 ): Promise<unknown> {
-  const bearerToken = process.env.TWITTER_BEARER_TOKEN;
-  if (!bearerToken) {
-    throw new ExternalApiError('auth_error', 'TWITTER_BEARER_TOKEN not set', 'twitter');
-  }
-
   const searchParams = new URLSearchParams(params);
   const url = `${TWITTER_API_BASE}${endpoint}?${searchParams.toString()}`;
   const start = Date.now();
@@ -68,7 +64,7 @@ async function twitterFetch(
       sourceLogger.warn({ waitMs, attempt }, 'Twitter rate limited');
       if (attempt < MAX_RETRIES) {
         await new Promise((r) => setTimeout(r, Math.min(waitMs, 30_000)));
-        return twitterFetch(endpoint, params, attempt + 1);
+        return twitterFetch(endpoint, params, bearerToken, attempt + 1);
       }
       throw new ExternalApiError('rate_limit', 'Twitter rate limit exceeded', 'twitter', 429);
     }
@@ -81,7 +77,7 @@ async function twitterFetch(
       if (attempt < MAX_RETRIES) {
         const delay = Math.pow(2, attempt) * 1000;
         await new Promise((r) => setTimeout(r, delay));
-        return twitterFetch(endpoint, params, attempt + 1);
+        return twitterFetch(endpoint, params, bearerToken, attempt + 1);
       }
       throw new ExternalApiError('api_error', `Twitter API returned ${response.status}`, 'twitter', response.status);
     }
@@ -94,7 +90,7 @@ async function twitterFetch(
       const delay = Math.pow(2, attempt) * 1000;
       sourceLogger.warn({ attempt, delay, err }, 'Twitter request failed, retrying');
       await new Promise((r) => setTimeout(r, delay));
-      return twitterFetch(endpoint, params, attempt + 1);
+      return twitterFetch(endpoint, params, bearerToken, attempt + 1);
     }
 
     throw new ExternalApiError('network_error', `Twitter network error: ${String(err)}`, 'twitter');
@@ -103,11 +99,11 @@ async function twitterFetch(
 
 export async function searchTweets(
   keywords: string[],
+  bearerToken: string | null,
   maxResults = 20
 ): Promise<RawTrendItem[]> {
-  const bearerToken = process.env.TWITTER_BEARER_TOKEN;
   if (!bearerToken) {
-    sourceLogger.warn('TWITTER_BEARER_TOKEN not set, skipping Twitter search');
+    sourceLogger.warn('Twitter bearer token not configured, skipping Twitter search');
     return [];
   }
 
@@ -116,18 +112,21 @@ export async function searchTweets(
     .map((k) => (k.includes(' ') ? `"${k}"` : k))
     .join(' OR ');
 
-  // Exclude retweets and replies to get original content
   const fullQuery = `(${query}) -is:retweet -is:reply lang:en`;
 
   sourceLogger.info({ query: fullQuery, maxResults }, 'Searching Twitter');
 
   try {
-    const raw = await twitterFetch('/tweets/search/recent', {
-      query: fullQuery,
-      max_results: String(Math.min(maxResults, 100)),
-      'tweet.fields': 'created_at,public_metrics,author_id',
-      sort_order: 'relevancy',
-    });
+    const raw = await twitterFetch(
+      '/tweets/search/recent',
+      {
+        query: fullQuery,
+        max_results: String(Math.min(maxResults, 100)),
+        'tweet.fields': 'created_at,public_metrics,author_id',
+        sort_order: 'relevancy',
+      },
+      bearerToken
+    );
 
     const data = raw as TwitterSearchResponse;
     const tweets = data.data ?? [];
