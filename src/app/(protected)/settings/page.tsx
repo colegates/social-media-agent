@@ -2,15 +2,46 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { User, Bell, Palette, Key, ChevronRight, Database } from 'lucide-react';
+import { User, Bell, Palette, Key, ChevronRight, Database, Monitor } from 'lucide-react';
 import { LogoutButton } from '@/components/features/settings/LogoutButton';
 import { DataManagementClient } from '@/components/features/settings/DataManagementClient';
 
 export const metadata: Metadata = {
   title: 'Settings',
 };
+
+const SETTINGS_LINKS = [
+  {
+    href: '/settings/profile',
+    icon: User,
+    title: 'Profile',
+    description: 'Update your name and change your password',
+  },
+  {
+    href: '/settings/style',
+    icon: Palette,
+    title: 'Style Profile',
+    description: 'Configure your brand voice and style for AI generation',
+  },
+  {
+    href: '/settings/api-keys',
+    icon: Key,
+    title: 'API Keys',
+    description: 'Connect Anthropic, SerpAPI, Apify, Twitter, and more',
+  },
+  {
+    href: '/settings/notifications',
+    icon: Bell,
+    title: 'Notifications',
+    description: 'Manage push notification preferences per event type',
+  },
+  {
+    href: '/settings/automation',
+    icon: Monitor,
+    title: 'Automation',
+    description: 'Configure global automation rules and schedules',
+  },
+];
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -19,84 +50,27 @@ export default async function SettingsPage() {
     <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
+        <p className="text-muted-foreground mt-1">
+          Manage your account and preferences ·{' '}
+          <span className="font-medium">{session?.user?.email}</span>
+        </p>
       </div>
 
-      <div className="max-w-2xl space-y-6">
-        {/* Profile */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4" />
-              Profile
-            </CardTitle>
-            <CardDescription>Your account details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-muted-foreground text-sm font-medium">Name</p>
-              <p className="mt-0.5">{session?.user?.name ?? 'Not set'}</p>
-            </div>
-            <Separator />
-            <div>
-              <p className="text-muted-foreground text-sm font-medium">Email</p>
-              <p className="mt-0.5">{session?.user?.email}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Style Profile - active link */}
-        <Link href="/settings/style">
-          <Card className="hover:bg-accent/50 cursor-pointer transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Palette className="h-4 w-4" />
-                Style Profile
-                <ChevronRight className="text-muted-foreground ml-auto h-4 w-4" />
-              </CardTitle>
-              <CardDescription>Configure your brand voice and style for AI generation</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* API Keys - active link */}
-        <Link href="/settings/api-keys">
-          <Card className="hover:bg-accent/50 cursor-pointer transition-colors">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Key className="h-4 w-4" />
-                API Keys
-                <ChevronRight className="text-muted-foreground ml-auto h-4 w-4" />
-              </CardTitle>
-              <CardDescription>Connect Anthropic, SerpAPI, Apify, Twitter, and more</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-
-        {/* Coming soon sections */}
-        {[
-          {
-            icon: Bell,
-            title: 'Notifications',
-            description: 'Manage push notification preferences',
-          },
-        ].map((section) => {
-          const Icon = section.icon;
-          return (
-            <Card key={section.title} className="opacity-60">
-              <CardHeader>
+      <div className="max-w-2xl space-y-3">
+        {SETTINGS_LINKS.map(({ href, icon: Icon, title, description }) => (
+          <Link key={href} href={href}>
+            <Card className="hover:bg-accent/50 cursor-pointer transition-colors">
+              <CardHeader className="py-4">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Icon className="h-4 w-4" />
-                  {section.title}
-                  <Badge variant="outline" className="ml-auto text-xs">
-                    Coming soon
-                  </Badge>
+                  {title}
+                  <ChevronRight className="text-muted-foreground ml-auto h-4 w-4" />
                 </CardTitle>
-                <CardDescription>{section.description}</CardDescription>
+                <CardDescription>{description}</CardDescription>
               </CardHeader>
             </Card>
-          );
-        })}
+          </Link>
+        ))}
 
         {/* Data Management */}
         <Card>

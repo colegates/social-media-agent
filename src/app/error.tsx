@@ -11,8 +11,12 @@ interface ErrorPageProps {
 
 export default function GlobalError({ error, reset }: ErrorPageProps) {
   useEffect(() => {
-    // Log error to monitoring service in production
-    console.error('Global error:', error);
+    // Sentry captures errors automatically via sentry.client.config.ts instrumentation.
+    // In development, surface the error to the console for debugging.
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.error('[GlobalError]', error.message, error.digest);
+    }
   }, [error]);
 
   return (
@@ -25,6 +29,9 @@ export default function GlobalError({ error, reset }: ErrorPageProps) {
         <p className="text-muted-foreground mb-6">
           An unexpected error occurred. Our team has been notified.
         </p>
+        {error.digest && (
+          <p className="text-muted-foreground mb-4 font-mono text-xs">Error ID: {error.digest}</p>
+        )}
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button onClick={reset}>Try again</Button>
           <a

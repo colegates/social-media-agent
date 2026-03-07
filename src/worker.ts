@@ -206,20 +206,77 @@ async function start(): Promise<void> {
   // Event Listeners
   // ─────────────────────────────────────────────────────
 
+  // ─────────────────────────────────────────────────────
+  // Dead Letter Queue (DLQ) — captures permanently failed jobs
+  // ─────────────────────────────────────────────────────
+
+  const { Queue: BullQueue } = await import('bullmq');
+  const dlqQueue = new BullQueue('dead-letter', {
+    connection,
+    defaultJobOptions: {
+      removeOnComplete: { count: 200 },
+      removeOnFail: false, // keep DLQ entries for audit
+    },
+  });
+
+  async function moveToDlq(
+    queueName: string,
+    jobId: string | undefined,
+    jobName: string | undefined,
+    jobData: unknown,
+    err: Error
+  ): Promise<void> {
+    try {
+      await dlqQueue.add('failed-job', {
+        originalQueue: queueName,
+        originalJobId: jobId,
+        originalJobName: jobName,
+        originalJobData: jobData,
+        failedAt: new Date().toISOString(),
+        errorMessage: err.message,
+        errorStack: err.stack,
+      });
+      workerLogger.warn(
+        { queueName, jobId, jobName },
+        'Job moved to dead letter queue after all retries exhausted'
+      );
+    } catch (dlqErr) {
+      workerLogger.error({ dlqErr }, 'Failed to move job to DLQ');
+    }
+  }
+
   trendScanWorker.on('completed', (job) => {
     workerLogger.info({ jobId: job.id, jobName: job.name }, 'Job completed');
   });
 
   trendScanWorker.on('failed', (job, err) => {
     workerLogger.error({ jobId: job?.id, jobName: job?.name, err }, 'Job failed');
+    // Move to DLQ when all retries exhausted (attemptsMade equals max attempts)
+    if (job && (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)) {
+      void moveToDlq(QUEUE_NAMES.TREND_SCAN, job.id, job.name, job.data, err);
+    }
   });
 
   trendScanWorker.on('error', (err) => {
     workerLogger.error({ err }, 'Trend scan worker error');
   });
 
+  contentIdeasWorker.on('failed', (job, err) => {
+    workerLogger.error({ jobId: job?.id, err }, 'Content ideas job failed');
+    if (job && (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)) {
+      void moveToDlq(QUEUE_NAMES.CONTENT_IDEAS, job.id, job.name, job.data, err);
+    }
+  });
+
   contentIdeasWorker.on('error', (err) => {
     workerLogger.error({ err }, 'Content ideas worker error');
+  });
+
+  contentGenerationWorker.on('failed', (job, err) => {
+    workerLogger.error({ jobId: job?.id, err }, 'Content generation job failed');
+    if (job && (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)) {
+      void moveToDlq(QUEUE_NAMES.CONTENT_GENERATION, job.id, job.name, job.data, err);
+    }
   });
 
   contentGenerationWorker.on('error', (err) => {
