@@ -1,5 +1,11 @@
-CREATE TYPE "public"."generated_content_status" AS ENUM('pending', 'generating', 'completed', 'failed', 'approved', 'published');--> statement-breakpoint
-CREATE TYPE "public"."generated_content_type" AS ENUM('image', 'video', 'blog_article', 'social_copy', 'carousel');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."generated_content_status" AS ENUM('pending', 'generating', 'completed', 'failed', 'approved', 'published');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."generated_content_type" AS ENUM('image', 'video', 'blog_article', 'social_copy', 'carousel');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE "generated_content" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"content_idea_id" uuid NOT NULL,
