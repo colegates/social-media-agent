@@ -19,117 +19,14 @@ import type { TrendScanJobData, ContentIdeasJobData, ContentGenerationJobData } 
 
 const workerLogger = logger.child({ module: 'worker' });
 
-const connection = getRedisConnectionOptions();
-
 // ─────────────────────────────────────────────────────────
-// Trend Scan Worker
-// ─────────────────────────────────────────────────────────
-
-const trendScanWorker = new Worker<TrendScanJobData>(
-  QUEUE_NAMES.TREND_SCAN,
-  async (job) => {
-    const jobLogger = workerLogger.child({
-      jobId: job.id,
-      jobName: job.name,
-      topicId: job.data.topicId,
-      scanJobId: job.data.scanJobId,
-    });
-
-    const start = Date.now();
-    jobLogger.info({ isManual: job.data.isManual }, 'Trend scan job started');
-
-    try {
-      const result = await runTrendScan(
-        job.data.topicId,
-        job.data.userId,
-        job.data.scanJobId
-      );
-
-      const duration = Date.now() - start;
-      jobLogger.info({ trendsFound: result.trendsFound, duration }, 'Trend scan job completed');
-
-      return result;
-    } catch (err) {
-      const duration = Date.now() - start;
-      jobLogger.error({ err, duration }, 'Trend scan job failed');
-      throw err;
-    }
-  },
-  {
-    connection,
-    concurrency: 3,
-    limiter: {
-      max: 5,
-      duration: 60_000, // max 5 scans per minute
-    },
-  }
-);
-
-// ─────────────────────────────────────────────────────────
-// Content Ideas Worker (Stage 5 placeholder)
+// Worker instances (initialised inside start() to avoid
+// throwing at module load time when REDIS_URL is absent)
 // ─────────────────────────────────────────────────────────
 
-const contentIdeasWorker = new Worker<ContentIdeasJobData>(
-  QUEUE_NAMES.CONTENT_IDEAS,
-  async (job) => {
-    const jobLogger = workerLogger.child({
-      jobId: job.id,
-      topicId: job.data.topicId,
-      trendCount: job.data.trendIds.length,
-    });
-    jobLogger.info('Content ideas job received (Stage 5 - not yet implemented)');
-    // Stage 5 will implement this
-  },
-  {
-    connection,
-    concurrency: 2,
-  }
-);
-
-// ─────────────────────────────────────────────────────────
-// Content Generation Worker (Stage 6 placeholder)
-// ─────────────────────────────────────────────────────────
-
-const contentGenerationWorker = new Worker<ContentGenerationJobData>(
-  QUEUE_NAMES.CONTENT_GENERATION,
-  async (job) => {
-    const jobLogger = workerLogger.child({
-      jobId: job.id,
-      topicId: job.data.topicId,
-      contentIdeaId: job.data.contentIdeaId,
-    });
-    jobLogger.info('Content generation job received (Stage 6 - not yet implemented)');
-    // Stage 6 will implement this
-  },
-  {
-    connection,
-    concurrency: 2,
-  }
-);
-
-// ─────────────────────────────────────────────────────────
-// Event Listeners
-// ─────────────────────────────────────────────────────────
-
-trendScanWorker.on('completed', (job) => {
-  workerLogger.info({ jobId: job.id, jobName: job.name }, 'Job completed');
-});
-
-trendScanWorker.on('failed', (job, err) => {
-  workerLogger.error({ jobId: job?.id, jobName: job?.name, err }, 'Job failed');
-});
-
-trendScanWorker.on('error', (err) => {
-  workerLogger.error({ err }, 'Trend scan worker error');
-});
-
-contentIdeasWorker.on('error', (err) => {
-  workerLogger.error({ err }, 'Content ideas worker error');
-});
-
-contentGenerationWorker.on('error', (err) => {
-  workerLogger.error({ err }, 'Content generation worker error');
-});
+let trendScanWorker: Worker<TrendScanJobData>;
+let contentIdeasWorker: Worker<ContentIdeasJobData>;
+let contentGenerationWorker: Worker<ContentGenerationJobData>;
 
 // ─────────────────────────────────────────────────────────
 // Startup
@@ -137,6 +34,118 @@ contentGenerationWorker.on('error', (err) => {
 
 async function start(): Promise<void> {
   workerLogger.info('Background worker starting');
+
+  const connection = getRedisConnectionOptions();
+
+  // ─────────────────────────────────────────────────────
+  // Trend Scan Worker
+  // ─────────────────────────────────────────────────────
+
+  trendScanWorker = new Worker<TrendScanJobData>(
+    QUEUE_NAMES.TREND_SCAN,
+    async (job) => {
+      const jobLogger = workerLogger.child({
+        jobId: job.id,
+        jobName: job.name,
+        topicId: job.data.topicId,
+        scanJobId: job.data.scanJobId,
+      });
+
+      const startTime = Date.now();
+      jobLogger.info({ isManual: job.data.isManual }, 'Trend scan job started');
+
+      try {
+        const result = await runTrendScan(
+          job.data.topicId,
+          job.data.userId,
+          job.data.scanJobId
+        );
+
+        const duration = Date.now() - startTime;
+        jobLogger.info({ trendsFound: result.trendsFound, duration }, 'Trend scan job completed');
+
+        return result;
+      } catch (err) {
+        const duration = Date.now() - startTime;
+        jobLogger.error({ err, duration }, 'Trend scan job failed');
+        throw err;
+      }
+    },
+    {
+      connection,
+      concurrency: 3,
+      limiter: {
+        max: 5,
+        duration: 60_000, // max 5 scans per minute
+      },
+    }
+  );
+
+  // ─────────────────────────────────────────────────────
+  // Content Ideas Worker (Stage 5 placeholder)
+  // ─────────────────────────────────────────────────────
+
+  contentIdeasWorker = new Worker<ContentIdeasJobData>(
+    QUEUE_NAMES.CONTENT_IDEAS,
+    async (job) => {
+      const jobLogger = workerLogger.child({
+        jobId: job.id,
+        topicId: job.data.topicId,
+        trendCount: job.data.trendIds.length,
+      });
+      jobLogger.info('Content ideas job received (Stage 5 - not yet implemented)');
+      // Stage 5 will implement this
+    },
+    {
+      connection,
+      concurrency: 2,
+    }
+  );
+
+  // ─────────────────────────────────────────────────────
+  // Content Generation Worker (Stage 6 placeholder)
+  // ─────────────────────────────────────────────────────
+
+  contentGenerationWorker = new Worker<ContentGenerationJobData>(
+    QUEUE_NAMES.CONTENT_GENERATION,
+    async (job) => {
+      const jobLogger = workerLogger.child({
+        jobId: job.id,
+        topicId: job.data.topicId,
+        contentIdeaId: job.data.contentIdeaId,
+      });
+      jobLogger.info('Content generation job received (Stage 6 - not yet implemented)');
+      // Stage 6 will implement this
+    },
+    {
+      connection,
+      concurrency: 2,
+    }
+  );
+
+  // ─────────────────────────────────────────────────────
+  // Event Listeners
+  // ─────────────────────────────────────────────────────
+
+  trendScanWorker.on('completed', (job) => {
+    workerLogger.info({ jobId: job.id, jobName: job.name }, 'Job completed');
+  });
+
+  trendScanWorker.on('failed', (job, err) => {
+    workerLogger.error({ jobId: job?.id, jobName: job?.name, err }, 'Job failed');
+  });
+
+  trendScanWorker.on('error', (err) => {
+    workerLogger.error({ err }, 'Trend scan worker error');
+  });
+
+  contentIdeasWorker.on('error', (err) => {
+    workerLogger.error({ err }, 'Content ideas worker error');
+  });
+
+  contentGenerationWorker.on('error', (err) => {
+    workerLogger.error({ err }, 'Content generation worker error');
+  });
 
   // Initialise recurring job scheduler
   await initScheduler();
@@ -159,9 +168,9 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     await Promise.all([
-      trendScanWorker.close(),
-      contentIdeasWorker.close(),
-      contentGenerationWorker.close(),
+      trendScanWorker?.close(),
+      contentIdeasWorker?.close(),
+      contentGenerationWorker?.close(),
     ]);
 
     await closeRedisConnection();
