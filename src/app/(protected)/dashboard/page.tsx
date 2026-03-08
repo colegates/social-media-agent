@@ -108,20 +108,23 @@ export default async function DashboardPage() {
         .from(generatedContent)
         .where(and(eq(generatedContent.userId, userId), eq(generatedContent.status, 'completed')))
         .limit(100)
-        .then((rows) => rows.length),
+        .then((rows) => rows.length)
+        .catch(() => 0),
       // Active automation rules count
       db
         .select({ id: automationRules.id })
         .from(automationRules)
         .where(and(eq(automationRules.userId, userId), eq(automationRules.isActive, true)))
-        .then((rows) => rows.length),
+        .then((rows) => rows.length)
+        .catch(() => 0),
       // Recent automation activity
       db
         .select()
         .from(automationLogs)
         .where(and(eq(automationLogs.userId, userId), gte(automationLogs.createdAt, oneDayAgo)))
         .orderBy(desc(automationLogs.createdAt))
-        .limit(5),
+        .limit(5)
+        .catch(() => []),
     ]);
 
     const statsByStatus = Object.fromEntries(ideaStats.map((r) => [r.status, r.total]));
