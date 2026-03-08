@@ -1,5 +1,8 @@
 import { Queue } from 'bullmq';
+import { logger } from '@/lib/logger';
 import { getRedisConnectionOptions } from './connection';
+
+const queueLogger = logger.child({ module: 'queue' });
 
 // ─────────────────────────────────────────────────────────
 // Job Data Types
@@ -91,6 +94,9 @@ export function getTrendScanQueue(): AnyQueue {
       connection: getRedisConnectionOptions(),
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
+    trendScanQueue.on('error', (err) => {
+      queueLogger.error({ queue: QUEUE_NAMES.TREND_SCAN, err: err.message }, 'Queue connection error');
+    });
   }
   return trendScanQueue;
 }
@@ -100,6 +106,9 @@ export function getContentIdeasQueue(): AnyQueue {
     contentIdeasQueue = new Queue(QUEUE_NAMES.CONTENT_IDEAS, {
       connection: getRedisConnectionOptions(),
       defaultJobOptions: DEFAULT_JOB_OPTIONS,
+    });
+    contentIdeasQueue.on('error', (err) => {
+      queueLogger.error({ queue: QUEUE_NAMES.CONTENT_IDEAS, err: err.message }, 'Queue connection error');
     });
   }
   return contentIdeasQueue;
@@ -115,6 +124,9 @@ export function getContentGenerationQueue(): AnyQueue {
         removeOnComplete: { count: 50 },
         removeOnFail: { count: 25 },
       },
+    });
+    contentGenerationQueue.on('error', (err) => {
+      queueLogger.error({ queue: QUEUE_NAMES.CONTENT_GENERATION, err: err.message }, 'Queue connection error');
     });
   }
   return contentGenerationQueue;
