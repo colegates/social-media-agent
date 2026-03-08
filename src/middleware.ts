@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { randomUUID } from 'crypto';
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -32,11 +31,18 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 const AUTH_PATHS = ['/login', '/register'];
-const PROTECTED_PATHS = ['/dashboard', '/topics', '/content', '/settings', '/notifications', '/onboarding'];
+const PROTECTED_PATHS = [
+  '/dashboard',
+  '/topics',
+  '/content',
+  '/settings',
+  '/notifications',
+  '/onboarding',
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const requestId = randomUUID();
+  const requestId = globalThis.crypto.randomUUID();
   const startTime = Date.now();
 
   // Apply security headers to all responses
