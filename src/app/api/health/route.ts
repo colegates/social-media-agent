@@ -31,6 +31,8 @@ export async function GET(): Promise<NextResponse> {
       const opts = getRedisConnectionOptions();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const redis = new IORedis(opts as any);
+      // Suppress unhandled 'error' events — the try/catch handles failures
+      redis.on('error', () => {});
       await redis.ping();
       await redis.quit();
       redisStatus = 'ok';
