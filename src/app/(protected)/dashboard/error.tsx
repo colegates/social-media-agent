@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle } from 'lucide-react';
@@ -11,10 +10,6 @@ interface ErrorProps {
 }
 
 export default function DashboardError({ error, reset }: ErrorProps) {
-  useEffect(() => {
-    console.error('Dashboard error:', error);
-  }, [error]);
-
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <Card>
@@ -29,7 +24,7 @@ export default function DashboardError({ error, reset }: ErrorProps) {
         </CardHeader>
         <CardContent className="space-y-3">
           {process.env.NODE_ENV !== 'production' && error.message && (
-            <p className="bg-muted rounded p-2 font-mono text-xs break-all">{error.message}</p>
+            <p className="bg-muted break-all rounded p-2 font-mono text-xs">{error.message}</p>
           )}
           {error.digest && (
             <p className="text-muted-foreground text-xs">Error ID: {error.digest}</p>

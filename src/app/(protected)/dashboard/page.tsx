@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import { eq, and, desc, gte, inArray, count, isNotNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
@@ -485,15 +486,14 @@ export default async function DashboardPage() {
   } catch (err: unknown) {
     const e = err as Record<string, unknown>;
     const cause = (e.cause ?? {}) as Record<string, unknown>;
-    console.error('[dashboard] server component error', {
-      message: String(e.message ?? ''),
-      causeMessage: String(cause.message ?? ''),
-      code: String(e.code ?? cause.code ?? ''),
-      stack: String(e.stack ?? '')
-        .split('\n')
-        .slice(0, 8)
-        .join('\n'),
-    });
+    logger.child({ route: 'dashboard' }).error(
+      {
+        message: String(e.message ?? ''),
+        causeMessage: String(cause.message ?? ''),
+        code: String(e.code ?? cause.code ?? ''),
+      },
+      'Dashboard server component error'
+    );
     throw err;
   }
 }

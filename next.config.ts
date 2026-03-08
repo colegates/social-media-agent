@@ -1,5 +1,4 @@
 import type { NextConfig } from 'next';
-import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   env: {
@@ -33,18 +32,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  // Sentry webpack plugin options
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-
-  // Only upload source maps in production CI builds
-  silent: true,
-
-  // Automatically tree-shake Sentry logger statements
-  disableLogger: true,
-
-  // Tunnels Sentry requests through /monitoring to avoid ad blockers
-  tunnelRoute: '/monitoring',
-});
+// NOTE: withSentryConfig is intentionally not used here.
+// @sentry/nextjs v10's automatic OpenTelemetry instrumentation is incompatible
+// with Next.js 16 server components. Sentry is initialised manually via
+// sentry.client.config.ts and sentry.server.config.ts instead.
+export default nextConfig;
